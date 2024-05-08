@@ -8,6 +8,7 @@ sh 'mvn -B -DskipTests clean package'
 }
 stage('pmd') {
 steps {
+sh 'mvn package -DskipTests'
 sh 'mvn pmd:pmd'
 }
 }
