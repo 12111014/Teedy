@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BaseResource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Docs Web</a> &gt; <a href="index.source.html" class="el_package">com.sismics.docs.rest.resource</a> &gt; <span class="el_source">BaseResource.java</span></div><h1>BaseResource.java</h1><pre class="source lang-java linenums">package com.sismics.docs.rest.resource;
+
+import com.google.common.collect.Lists;
+import com.sismics.docs.rest.constant.BaseFunction;
+import com.sismics.rest.exception.ForbiddenClientException;
+import com.sismics.security.IPrincipal;
+import com.sismics.security.UserPrincipal;
+import com.sismics.util.filter.SecurityFilter;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import java.security.Principal;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Base class of REST resources.
+ * 
+ * @author jtremeaux
+ */
+@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+@Produces(MediaType.APPLICATION_JSON)
+<span class="fc" id="L27">public abstract class BaseResource {</span>
+    /**
+     * @apiDefine admin Admin
+     * Only the admin user can access this resource
+     */
+
+    /**
+     * @apiDefine user Authenticated user
+     * All authenticated users can access this resource
+     */
+
+    /**
+     * @apiDefine none Anonymous user
+     * This resource can be accessed anonymously
+     */
+
+    /**
+     * @apiDefine server Server error
+     */
+
+    /**
+     * @apiDefine client Client error
+     */
+
+    /**
+     * Injects the HTTP request.
+     */
+    @Context
+    protected HttpServletRequest request;
+    
+    /**
+     * Application key.
+     */
+    @QueryParam(&quot;app_key&quot;)
+    protected String appKey;
+    
+    /**
+     * Principal of the authenticated user.
+     */
+    protected IPrincipal principal;
+
+    /**
+     * This method is used to check if the user is authenticated.
+     * 
+     * @return True if the user is authenticated and not anonymous
+     */
+    protected boolean authenticate() {
+<span class="fc" id="L74">        Principal principal = (Principal) request.getAttribute(SecurityFilter.PRINCIPAL_ATTRIBUTE);</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if (principal instanceof IPrincipal) {</span>
+<span class="fc" id="L76">            this.principal = (IPrincipal) principal;</span>
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">            return !this.principal.isAnonymous();</span>
+        } else {
+<span class="nc" id="L79">            return false;</span>
+        }
+    }
+    
+    /**
+     * Checks if the user has a base function. Throw an exception if the check fails.
+     * 
+     * @param baseFunction Base function to check
+     */
+    void checkBaseFunction(BaseFunction baseFunction) {
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">        if (!hasBaseFunction(baseFunction)) {</span>
+<span class="nc" id="L90">            throw new ForbiddenClientException();</span>
+        }
+<span class="fc" id="L92">    }</span>
+    
+    /**
+     * Checks if the user has a base function.
+     * 
+     * @param baseFunction Base function to check
+     * @return True if the user has the base function
+     */
+    boolean hasBaseFunction(BaseFunction baseFunction) {
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">        if (!(principal instanceof UserPrincipal)) {</span>
+<span class="nc" id="L102">            return false;</span>
+        }
+<span class="fc" id="L104">        Set&lt;String&gt; baseFunctionSet = ((UserPrincipal) principal).getBaseFunctionSet();</span>
+<span class="pc bpc" id="L105" title="1 of 4 branches missed.">        return baseFunctionSet != null &amp;&amp; baseFunctionSet.contains(baseFunction.name());</span>
+    }
+    
+    /**
+     * Returns a list of ACL target ID.
+     * 
+     * @param shareId Share ID (optional)
+     * @return List of ACL target ID
+     */
+    List&lt;String&gt; getTargetIdList(String shareId) {
+<span class="fc" id="L115">        List&lt;String&gt; targetIdList = Lists.newArrayList(principal.getGroupIdSet());</span>
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">        if (principal.getId() != null) {</span>
+<span class="fc" id="L117">            targetIdList.add(principal.getId());</span>
+        }
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">        if (shareId != null) {</span>
+<span class="nc" id="L120">            targetIdList.add(shareId);</span>
+        }
+<span class="fc" id="L122">        return targetIdList;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.9.202303310957</span></div></body></html>

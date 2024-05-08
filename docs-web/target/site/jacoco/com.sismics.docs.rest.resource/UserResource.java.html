@@ -1,0 +1,1182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserResource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Docs Web</a> &gt; <a href="index.source.html" class="el_package">com.sismics.docs.rest.resource</a> &gt; <span class="el_source">UserResource.java</span></div><h1>UserResource.java</h1><pre class="source lang-java linenums">package com.sismics.docs.rest.resource;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.Sets;
+import com.sismics.docs.core.constant.AclTargetType;
+import com.sismics.docs.core.constant.ConfigType;
+import com.sismics.docs.core.constant.Constants;
+import com.sismics.docs.core.dao.*;
+import com.sismics.docs.core.dao.criteria.GroupCriteria;
+import com.sismics.docs.core.dao.criteria.UserCriteria;
+import com.sismics.docs.core.dao.dto.GroupDto;
+import com.sismics.docs.core.dao.dto.UserDto;
+import com.sismics.docs.core.event.DocumentDeletedAsyncEvent;
+import com.sismics.docs.core.event.FileDeletedAsyncEvent;
+import com.sismics.docs.core.event.PasswordLostEvent;
+import com.sismics.docs.core.model.context.AppContext;
+import com.sismics.docs.core.model.jpa.*;
+import com.sismics.docs.core.util.ConfigUtil;
+import com.sismics.docs.core.util.RoutingUtil;
+import com.sismics.docs.core.util.authentication.AuthenticationUtil;
+import com.sismics.docs.core.util.jpa.SortCriteria;
+import com.sismics.docs.rest.constant.BaseFunction;
+import com.sismics.rest.exception.ClientException;
+import com.sismics.rest.exception.ForbiddenClientException;
+import com.sismics.rest.exception.ServerException;
+import com.sismics.rest.util.ValidationUtil;
+import com.sismics.security.UserPrincipal;
+import com.sismics.util.JsonUtil;
+import com.sismics.util.context.ThreadLocalContext;
+import com.sismics.util.filter.TokenBasedSecurityFilter;
+import com.sismics.util.totp.GoogleAuthenticator;
+import com.sismics.util.totp.GoogleAuthenticatorKey;
+import org.apache.commons.lang.StringUtils;
+
+import javax.json.Json;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonObjectBuilder;
+import javax.servlet.http.Cookie;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.NewCookie;
+import javax.ws.rs.core.Response;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * User REST resources.
+ * 
+ * @author jtremeaux
+ */
+@Path(&quot;/user&quot;)
+<span class="fc" id="L53">public class UserResource extends BaseResource {</span>
+    /**
+     * Creates a new user.
+     *
+     * @api {put} /user Register a new user
+     * @apiName PutUser
+     * @apiGroup User
+     * @apiParam {String{3..50}} username Username
+     * @apiParam {String{8..50}} password Password
+     * @apiParam {String{1..100}} email E-mail
+     * @apiParam {Number} storage_quota Storage quota (in bytes)
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (server) PrivateKeyError Error while generating a private key
+     * @apiError (client) AlreadyExistingUsername Login already used
+     * @apiError (server) UnknownError Unknown server error
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @param username User's username
+     * @param password Password
+     * @param email E-Mail
+     * @return Response
+     */
+    @PUT
+    public Response register(
+        @FormParam(&quot;username&quot;) String username,
+        @FormParam(&quot;password&quot;) String password,
+        @FormParam(&quot;email&quot;) String email,
+        @FormParam(&quot;storage_quota&quot;) String storageQuotaStr) {
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L85">            throw new ForbiddenClientException();</span>
+        }
+<span class="fc" id="L87">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Validate the input data
+<span class="fc" id="L90">        username = ValidationUtil.validateLength(username, &quot;username&quot;, 3, 50);</span>
+<span class="fc" id="L91">        ValidationUtil.validateUsername(username, &quot;username&quot;);</span>
+<span class="fc" id="L92">        password = ValidationUtil.validateLength(password, &quot;password&quot;, 8, 50);</span>
+<span class="fc" id="L93">        email = ValidationUtil.validateLength(email, &quot;email&quot;, 1, 100);</span>
+<span class="fc" id="L94">        Long storageQuota = ValidationUtil.validateLong(storageQuotaStr, &quot;storage_quota&quot;);</span>
+<span class="fc" id="L95">        ValidationUtil.validateEmail(email, &quot;email&quot;);</span>
+        
+        // Create the user
+<span class="fc" id="L98">        User user = new User();</span>
+<span class="fc" id="L99">        user.setRoleId(Constants.DEFAULT_USER_ROLE);</span>
+<span class="fc" id="L100">        user.setUsername(username);</span>
+<span class="fc" id="L101">        user.setPassword(password);</span>
+<span class="fc" id="L102">        user.setEmail(email);</span>
+<span class="fc" id="L103">        user.setStorageQuota(storageQuota);</span>
+<span class="fc" id="L104">        user.setOnboarding(true);</span>
+
+        // Create the user
+<span class="fc" id="L107">        UserDao userDao = new UserDao();</span>
+        try {
+<span class="fc" id="L109">            userDao.create(user, principal.getId());</span>
+<span class="nc" id="L110">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            if (&quot;AlreadyExistingUsername&quot;.equals(e.getMessage())) {</span>
+<span class="nc" id="L112">                throw new ClientException(&quot;AlreadyExistingUsername&quot;, &quot;Login already used&quot;, e);</span>
+            } else {
+<span class="nc" id="L114">                throw new ServerException(&quot;UnknownError&quot;, &quot;Unknown server error&quot;, e);</span>
+            }
+<span class="fc" id="L116">        }</span>
+        
+        // Always return OK
+<span class="fc" id="L119">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L120">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="fc" id="L121">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Updates the current user informations.
+     *
+     * @api {post} /user Update the current user
+     * @apiName PostUser
+     * @apiGroup User
+     * @apiParam {String{8..50}} password Password
+     * @apiParam {String{1..100}} email E-mail
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied or connected as guest
+     * @apiError (client) ValidationError Validation error
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param password Password
+     * @param email E-Mail
+     * @return Response
+     */
+    @POST
+    public Response update(
+        @FormParam(&quot;password&quot;) String password,
+        @FormParam(&quot;email&quot;) String email) {
+<span class="pc bpc" id="L146" title="2 of 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="fc" id="L147">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Validate the input data
+<span class="nc" id="L151">        password = ValidationUtil.validateLength(password, &quot;password&quot;, 8, 50, true);</span>
+<span class="nc" id="L152">        email = ValidationUtil.validateLength(email, &quot;email&quot;, 1, 100, true);</span>
+        
+        // Update the user
+<span class="nc" id="L155">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L156">        User user = userDao.getActiveByUsername(principal.getName());</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (email != null) {</span>
+<span class="nc" id="L158">            user.setEmail(email);</span>
+        }
+<span class="nc" id="L160">        user = userDao.update(user, principal.getId());</span>
+        
+        // Change the password
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (StringUtils.isNotBlank(password)) {</span>
+<span class="nc" id="L164">            user.setPassword(password);</span>
+<span class="nc" id="L165">            userDao.updatePassword(user, principal.getId());</span>
+        }
+        
+        // Always return OK
+<span class="nc" id="L169">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L170">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L171">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Updates a user informations.
+     *
+     * @api {post} /user/:username Update a user
+     * @apiName PostUserUsername
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiParam {String{8..50}} password Password
+     * @apiParam {String{1..100}} email E-mail
+     * @apiParam {Number} storage_quota Storage quota (in bytes)
+     * @apiParam {Boolean} disabled Disabled status
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) UserNotFound User not found
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @param username Username
+     * @param password Password
+     * @param email E-Mail
+     * @return Response
+     */
+    @POST
+    @Path(&quot;{username: [a-zA-Z0-9_@\\.]+}&quot;)
+    public Response update(
+        @PathParam(&quot;username&quot;) String username,
+        @FormParam(&quot;password&quot;) String password,
+        @FormParam(&quot;email&quot;) String email,
+        @FormParam(&quot;storage_quota&quot;) String storageQuotaStr,
+        @FormParam(&quot;disabled&quot;) Boolean disabled) {
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L206">            throw new ForbiddenClientException();</span>
+        }
+<span class="nc" id="L208">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Validate the input data
+<span class="nc" id="L211">        password = ValidationUtil.validateLength(password, &quot;password&quot;, 8, 50, true);</span>
+<span class="nc" id="L212">        email = ValidationUtil.validateLength(email, &quot;email&quot;, 1, 100, true);</span>
+        
+        // Check if the user exists
+<span class="nc" id="L215">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L216">        User user = userDao.getActiveByUsername(username);</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L218">            throw new ClientException(&quot;UserNotFound&quot;, &quot;The user does not exist&quot;);</span>
+        }
+
+        // Update the user
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (email != null) {</span>
+<span class="nc" id="L223">            user.setEmail(email);</span>
+        }
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (StringUtils.isNotBlank(storageQuotaStr)) {</span>
+<span class="nc" id="L226">            Long storageQuota = ValidationUtil.validateLong(storageQuotaStr, &quot;storage_quota&quot;);</span>
+<span class="nc" id="L227">            user.setStorageQuota(storageQuota);</span>
+        }
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        if (disabled != null) {</span>
+            // Cannot disable the admin user or the guest user
+<span class="nc" id="L231">            RoleBaseFunctionDao userBaseFuction = new RoleBaseFunctionDao();</span>
+<span class="nc" id="L232">            Set&lt;String&gt; baseFunctionSet = userBaseFuction.findByRoleId(Sets.newHashSet(user.getRoleId()));</span>
+<span class="nc bnc" id="L233" title="All 4 branches missed.">            if (Constants.GUEST_USER_ID.equals(username) || baseFunctionSet.contains(BaseFunction.ADMIN.name())) {</span>
+<span class="nc" id="L234">                disabled = false;</span>
+            }
+
+<span class="nc bnc" id="L237" title="All 4 branches missed.">            if (disabled &amp;&amp; user.getDisableDate() == null) {</span>
+                // Recording the disabled date
+<span class="nc" id="L239">                user.setDisableDate(new Date());</span>
+<span class="nc bnc" id="L240" title="All 4 branches missed.">            } else if (!disabled &amp;&amp; user.getDisableDate() != null) {</span>
+                // Emptying the disabled date
+<span class="nc" id="L242">                user.setDisableDate(null);</span>
+            }
+        }
+<span class="nc" id="L245">        user = userDao.update(user, principal.getId());</span>
+        
+        // Change the password
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (StringUtils.isNotBlank(password)) {</span>
+<span class="nc" id="L249">            user.setPassword(password);</span>
+<span class="nc" id="L250">            userDao.updatePassword(user, principal.getId());</span>
+        }
+        
+        // Always return OK
+<span class="nc" id="L254">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L255">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L256">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Checks if a username is available.
+     * Search only on active accounts.
+     *
+     * @api {get} /user/check_username Check username availability
+     * @apiName GetUserCheckUsername
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiSuccess {String} status Status OK or KO
+     * @apiPermission none
+     * @apiVersion 1.5.0
+     *
+     * @param username Username to check
+     * @return Response
+     */
+    @GET
+    @Path(&quot;check_username&quot;)
+    public Response checkUsername(
+        @QueryParam(&quot;username&quot;) String username) {
+<span class="nc" id="L278">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L279">        User user = userDao.getActiveByUsername(username);</span>
+        
+<span class="nc" id="L281">        JsonObjectBuilder response = Json.createObjectBuilder();</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        if (user != null) {</span>
+<span class="nc" id="L283">            response.add(&quot;status&quot;, &quot;ko&quot;)</span>
+<span class="nc" id="L284">                    .add(&quot;message&quot;, &quot;Username already registered&quot;);</span>
+        } else {
+<span class="nc" id="L286">            response.add(&quot;status&quot;, &quot;ok&quot;);</span>
+        }
+        
+<span class="nc" id="L289">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * This resource is used to authenticate the user and create a user session.
+     * The &quot;session&quot; is only used to identify the user, no other data is stored in the session.
+     *
+     * @api {post} /user/login Login a user
+     * @apiDescription This resource creates an authentication token and gives it back in a cookie.
+     * All authenticated resources will check this cookie to find the user currently logged in.
+     * @apiName PostUserLogin
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiParam {String} password Password (optional for guest login)
+     * @apiParam {String} code TOTP validation code
+     * @apiParam {Boolean} remember If true, create a long lasted token
+     * @apiSuccess {String} auth_token A cookie named auth_token containing the token ID
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationCodeRequired A TOTP validation code is required
+     * @apiPermission none
+     * @apiVersion 1.5.0
+     *
+     * @param username Username
+     * @param password Password
+     * @param longLasted Remember the user next time, create a long lasted session.
+     * @return Response
+     */
+    @POST
+    @Path(&quot;login&quot;)
+    public Response login(
+        @FormParam(&quot;username&quot;) String username,
+        @FormParam(&quot;password&quot;) String password,
+        @FormParam(&quot;code&quot;) String validationCodeStr,
+        @FormParam(&quot;remember&quot;) boolean longLasted) {
+        // Validate the input data
+<span class="fc" id="L324">        username = StringUtils.strip(username);</span>
+<span class="fc" id="L325">        password = StringUtils.strip(password);</span>
+
+        // Get the user
+<span class="fc" id="L328">        UserDao userDao = new UserDao();</span>
+<span class="fc" id="L329">        User user = null;</span>
+<span class="fc bfc" id="L330" title="All 2 branches covered.">        if (Constants.GUEST_USER_ID.equals(username)) {</span>
+<span class="fc bfc" id="L331" title="All 2 branches covered.">            if (ConfigUtil.getConfigBooleanValue(ConfigType.GUEST_LOGIN)) {</span>
+                // Login as guest
+<span class="fc" id="L333">                user = userDao.getActiveByUsername(Constants.GUEST_USER_ID);</span>
+            }
+        } else {
+            // Login as a normal user
+<span class="fc" id="L337">            user = AuthenticationUtil.authenticate(username, password);</span>
+        }
+<span class="fc bfc" id="L339" title="All 2 branches covered.">        if (user == null) {</span>
+<span class="fc" id="L340">            throw new ForbiddenClientException();</span>
+        }
+
+        // Two factor authentication
+<span class="pc bpc" id="L344" title="1 of 2 branches missed.">        if (user.getTotpKey() != null) {</span>
+            // If TOTP is enabled, ask a validation code
+<span class="nc bnc" id="L346" title="All 2 branches missed.">            if (Strings.isNullOrEmpty(validationCodeStr)) {</span>
+<span class="nc" id="L347">                throw new ClientException(&quot;ValidationCodeRequired&quot;, &quot;An OTP validation code is required&quot;);</span>
+            }
+            
+            // Check the validation code
+<span class="nc" id="L351">            int validationCode = ValidationUtil.validateInteger(validationCodeStr, &quot;code&quot;);</span>
+<span class="nc" id="L352">            GoogleAuthenticator googleAuthenticator = new GoogleAuthenticator();</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (!googleAuthenticator.authorize(user.getTotpKey(), validationCode)) {</span>
+<span class="nc" id="L354">                throw new ForbiddenClientException();</span>
+            }
+        }
+        
+        // Get the remote IP
+<span class="fc" id="L359">        String ip = request.getHeader(&quot;x-forwarded-for&quot;);</span>
+<span class="pc bpc" id="L360" title="1 of 2 branches missed.">        if (Strings.isNullOrEmpty(ip)) {</span>
+<span class="fc" id="L361">            ip = request.getRemoteAddr();</span>
+        }
+        
+        // Create a new session token
+<span class="fc" id="L365">        AuthenticationTokenDao authenticationTokenDao = new AuthenticationTokenDao();</span>
+<span class="fc" id="L366">        AuthenticationToken authenticationToken = new AuthenticationToken()</span>
+<span class="fc" id="L367">            .setUserId(user.getId())</span>
+<span class="fc" id="L368">            .setLongLasted(longLasted)</span>
+<span class="fc" id="L369">            .setIp(StringUtils.abbreviate(ip, 45))</span>
+<span class="fc" id="L370">            .setUserAgent(StringUtils.abbreviate(request.getHeader(&quot;user-agent&quot;), 1000));</span>
+<span class="fc" id="L371">        String token = authenticationTokenDao.create(authenticationToken);</span>
+        
+        // Cleanup old session tokens
+<span class="fc" id="L374">        authenticationTokenDao.deleteOldSessionToken(user.getId());</span>
+
+<span class="fc" id="L376">        JsonObjectBuilder response = Json.createObjectBuilder();</span>
+<span class="pc bpc" id="L377" title="1 of 2 branches missed.">        int maxAge = longLasted ? TokenBasedSecurityFilter.TOKEN_LONG_LIFETIME : -1;</span>
+<span class="fc" id="L378">        NewCookie cookie = new NewCookie(TokenBasedSecurityFilter.COOKIE_NAME, token, &quot;/&quot;, null, null, maxAge, false);</span>
+<span class="fc" id="L379">        return Response.ok().entity(response.build()).cookie(cookie).build();</span>
+    }
+
+    /**
+     * Logs out the user and deletes the active session.
+     *
+     * @api {post} /user/logout Logout a user
+     * @apiDescription This resource deletes the authentication token created by POST /user/login and removes the cookie.
+     * @apiName PostUserLogout
+     * @apiGroup User
+     * @apiSuccess {String} auth_token An expired cookie named auth_token containing no value
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (server) AuthenticationTokenError Error deleting the authentication token
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @POST
+    @Path(&quot;logout&quot;)
+    public Response logout() {
+<span class="pc bpc" id="L400" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L401">            throw new ForbiddenClientException();</span>
+        }
+
+        // Get the value of the session token
+<span class="fc" id="L405">        String authToken = getAuthToken();</span>
+        
+<span class="fc" id="L407">        AuthenticationTokenDao authenticationTokenDao = new AuthenticationTokenDao();</span>
+<span class="fc" id="L408">        AuthenticationToken authenticationToken = null;</span>
+<span class="pc bpc" id="L409" title="1 of 2 branches missed.">        if (authToken != null) {</span>
+<span class="fc" id="L410">            authenticationToken = authenticationTokenDao.get(authToken);</span>
+        }
+        
+        // No token : nothing to do
+<span class="pc bpc" id="L414" title="1 of 2 branches missed.">        if (authenticationToken == null) {</span>
+<span class="nc" id="L415">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Deletes the server token
+        try {
+<span class="fc" id="L420">            authenticationTokenDao.delete(authToken);</span>
+<span class="nc" id="L421">        } catch (Exception e) {</span>
+<span class="nc" id="L422">            throw new ServerException(&quot;AuthenticationTokenError&quot;, &quot;Error deleting the authentication token: &quot; + authToken, e);</span>
+<span class="fc" id="L423">        }</span>
+        
+        // Deletes the client token in the HTTP response
+<span class="fc" id="L426">        JsonObjectBuilder response = Json.createObjectBuilder();</span>
+<span class="fc" id="L427">        NewCookie cookie = new NewCookie(TokenBasedSecurityFilter.COOKIE_NAME, null, &quot;/&quot;, null, 1, null, -1, new Date(1), false, false);</span>
+<span class="fc" id="L428">        return Response.ok().entity(response.build()).cookie(cookie).build();</span>
+    }
+
+    /**
+     * Deletes the current user.
+     *
+     * @api {delete} /user Delete the current user
+     * @apiDescription All associated entities will be deleted as well.
+     * @apiName DeleteUser
+     * @apiGroup User
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied or the user cannot be deleted
+     * @apiError (client) UserUsedInRouteModel The user is used in a route model
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @DELETE
+    public Response delete() {
+<span class="pc bpc" id="L448" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L449">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Ensure that the admin or guest users are not deleted
+<span class="pc bpc" id="L453" title="2 of 4 branches missed.">        if (hasBaseFunction(BaseFunction.ADMIN) || principal.isGuest()) {</span>
+<span class="fc" id="L454">            throw new ClientException(&quot;ForbiddenError&quot;, &quot;This user cannot be deleted&quot;);</span>
+        }
+
+        // Check that this user is not used in any workflow
+<span class="nc" id="L458">        String routeModelName = RoutingUtil.findRouteModelNameByTargetName(AclTargetType.USER, principal.getName());</span>
+<span class="nc bnc" id="L459" title="All 2 branches missed.">        if (routeModelName != null) {</span>
+<span class="nc" id="L460">            throw new ClientException(&quot;UserUsedInRouteModel&quot;, routeModelName);</span>
+        }
+        
+        // Find linked data
+<span class="nc" id="L464">        DocumentDao documentDao = new DocumentDao();</span>
+<span class="nc" id="L465">        List&lt;Document&gt; documentList = documentDao.findByUserId(principal.getId());</span>
+<span class="nc" id="L466">        FileDao fileDao = new FileDao();</span>
+<span class="nc" id="L467">        List&lt;File&gt; fileList = fileDao.findByUserId(principal.getId());</span>
+        
+        // Delete the user
+<span class="nc" id="L470">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L471">        userDao.delete(principal.getName(), principal.getId());</span>
+        
+        // Raise deleted events for documents
+<span class="nc bnc" id="L474" title="All 2 branches missed.">        for (Document document : documentList) {</span>
+<span class="nc" id="L475">            DocumentDeletedAsyncEvent documentDeletedAsyncEvent = new DocumentDeletedAsyncEvent();</span>
+<span class="nc" id="L476">            documentDeletedAsyncEvent.setUserId(principal.getId());</span>
+<span class="nc" id="L477">            documentDeletedAsyncEvent.setDocumentId(document.getId());</span>
+<span class="nc" id="L478">            ThreadLocalContext.get().addAsyncEvent(documentDeletedAsyncEvent);</span>
+<span class="nc" id="L479">        }</span>
+        
+        // Raise deleted events for files (don't bother sending document updated event)
+<span class="nc bnc" id="L482" title="All 2 branches missed.">        for (File file : fileList) {</span>
+<span class="nc" id="L483">            FileDeletedAsyncEvent fileDeletedAsyncEvent = new FileDeletedAsyncEvent();</span>
+<span class="nc" id="L484">            fileDeletedAsyncEvent.setUserId(principal.getId());</span>
+<span class="nc" id="L485">            fileDeletedAsyncEvent.setFileId(file.getId());</span>
+<span class="nc" id="L486">            ThreadLocalContext.get().addAsyncEvent(fileDeletedAsyncEvent);</span>
+<span class="nc" id="L487">        }</span>
+        
+        // Always return OK
+<span class="nc" id="L490">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L491">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L492">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Deletes a user.
+     *
+     * @api {delete} /user/:username Delete a user
+     * @apiDescription All associated entities will be deleted as well.
+     * @apiName DeleteUserUsername
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied or the user cannot be deleted
+     * @apiError (client) UserNotFound The user does not exist
+     * @apiError (client) UserUsedInRouteModel The user is used in a route model
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @param username Username
+     * @return Response
+     */
+    @DELETE
+    @Path(&quot;{username: [a-zA-Z0-9_@\\.]+}&quot;)
+    public Response delete(@PathParam(&quot;username&quot;) String username) {
+<span class="nc bnc" id="L516" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L517">            throw new ForbiddenClientException();</span>
+        }
+<span class="nc" id="L519">        checkBaseFunction(BaseFunction.ADMIN);</span>
+
+        // Cannot delete the guest user
+<span class="nc bnc" id="L522" title="All 2 branches missed.">        if (Constants.GUEST_USER_ID.equals(username)) {</span>
+<span class="nc" id="L523">            throw new ClientException(&quot;ForbiddenError&quot;, &quot;The guest user cannot be deleted&quot;);</span>
+        }
+
+        // Check that the user exists
+<span class="nc" id="L527">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L528">        User user = userDao.getActiveByUsername(username);</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L530">            throw new ClientException(&quot;UserNotFound&quot;, &quot;The user does not exist&quot;);</span>
+        }
+        
+        // Ensure that the admin user is not deleted
+<span class="nc" id="L534">        RoleBaseFunctionDao roleBaseFunctionDao = new RoleBaseFunctionDao();</span>
+<span class="nc" id="L535">        Set&lt;String&gt; baseFunctionSet = roleBaseFunctionDao.findByRoleId(Sets.newHashSet(user.getRoleId()));</span>
+<span class="nc bnc" id="L536" title="All 2 branches missed.">        if (baseFunctionSet.contains(BaseFunction.ADMIN.name())) {</span>
+<span class="nc" id="L537">            throw new ClientException(&quot;ForbiddenError&quot;, &quot;The admin user cannot be deleted&quot;);</span>
+        }
+
+        // Check that this user is not used in any workflow
+<span class="nc" id="L541">        String routeModelName = RoutingUtil.findRouteModelNameByTargetName(AclTargetType.USER, username);</span>
+<span class="nc bnc" id="L542" title="All 2 branches missed.">        if (routeModelName != null) {</span>
+<span class="nc" id="L543">            throw new ClientException(&quot;UserUsedInRouteModel&quot;, routeModelName);</span>
+        }
+        
+        // Find linked data
+<span class="nc" id="L547">        DocumentDao documentDao = new DocumentDao();</span>
+<span class="nc" id="L548">        List&lt;Document&gt; documentList = documentDao.findByUserId(user.getId());</span>
+<span class="nc" id="L549">        FileDao fileDao = new FileDao();</span>
+<span class="nc" id="L550">        List&lt;File&gt; fileList = fileDao.findByUserId(user.getId());</span>
+        
+        // Delete the user
+<span class="nc" id="L553">        userDao.delete(user.getUsername(), principal.getId());</span>
+        
+        // Raise deleted events for documents
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        for (Document document : documentList) {</span>
+<span class="nc" id="L557">            DocumentDeletedAsyncEvent documentDeletedAsyncEvent = new DocumentDeletedAsyncEvent();</span>
+<span class="nc" id="L558">            documentDeletedAsyncEvent.setUserId(principal.getId());</span>
+<span class="nc" id="L559">            documentDeletedAsyncEvent.setDocumentId(document.getId());</span>
+<span class="nc" id="L560">            ThreadLocalContext.get().addAsyncEvent(documentDeletedAsyncEvent);</span>
+<span class="nc" id="L561">        }</span>
+        
+        // Raise deleted events for files (don't bother sending document updated event)
+<span class="nc bnc" id="L564" title="All 2 branches missed.">        for (File file : fileList) {</span>
+<span class="nc" id="L565">            FileDeletedAsyncEvent fileDeletedAsyncEvent = new FileDeletedAsyncEvent();</span>
+<span class="nc" id="L566">            fileDeletedAsyncEvent.setUserId(principal.getId());</span>
+<span class="nc" id="L567">            fileDeletedAsyncEvent.setFileId(file.getId());</span>
+<span class="nc" id="L568">            ThreadLocalContext.get().addAsyncEvent(fileDeletedAsyncEvent);</span>
+<span class="nc" id="L569">        }</span>
+        
+        // Always return OK
+<span class="nc" id="L572">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L573">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L574">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Disable time-based one-time password for a specific user.
+     *
+     * @api {post} /user/:username/disable_totp Disable TOTP authentication for a specific user
+     * @apiName PostUserUsernameDisableTotp
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied or connected as guest
+     * @apiError (client) ValidationError Validation error
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param username Username
+     * @return Response
+     */
+    @POST
+    @Path(&quot;{username: [a-zA-Z0-9_@\\.]+}/disable_totp&quot;)
+    public Response disableTotpUsername(@PathParam(&quot;username&quot;) String username) {
+<span class="nc bnc" id="L596" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L597">            throw new ForbiddenClientException();</span>
+        }
+<span class="nc" id="L599">        checkBaseFunction(BaseFunction.ADMIN);</span>
+
+        // Get the user
+<span class="nc" id="L602">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L603">        User user = userDao.getActiveByUsername(username);</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L605">            throw new ForbiddenClientException();</span>
+        }
+
+        // Remove the TOTP key
+<span class="nc" id="L609">        user.setTotpKey(null);</span>
+<span class="nc" id="L610">        userDao.update(user, principal.getId());</span>
+
+        // Always return OK
+<span class="nc" id="L613">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L614">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L615">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Returns the information about the connected user.
+     *
+     * @api {get} /user Get the current user
+     * @apiName GetUser
+     * @apiGroup User
+     * @apiSuccess {Boolean} anonymous True if no user is connected
+     * @apiSuccess {Boolean} is_default_password True if the admin has the default password
+     * @apiSuccess {Boolean} onboarding True if the UI needs to display the onboarding
+     * @apiSuccess {String} username Username
+     * @apiSuccess {String} email E-mail
+     * @apiSuccess {Number} storage_quota Storage quota (in bytes)
+     * @apiSuccess {Number} storage_current Quota used (in bytes)
+     * @apiSuccess {Boolean} totp_enabled True if TOTP authentication is enabled
+     * @apiSuccess {String[]} base_functions Base functions
+     * @apiSuccess {String[]} groups Groups
+     * @apiPermission none
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @GET
+    public Response info() {
+<span class="nc" id="L641">        JsonObjectBuilder response = Json.createObjectBuilder();</span>
+<span class="nc bnc" id="L642" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L643">            response.add(&quot;anonymous&quot;, true);</span>
+
+            // Check if admin has the default password
+<span class="nc" id="L646">            UserDao userDao = new UserDao();</span>
+<span class="nc" id="L647">            User adminUser = userDao.getById(&quot;admin&quot;);</span>
+<span class="nc bnc" id="L648" title="All 4 branches missed.">            if (adminUser != null &amp;&amp; adminUser.getDeleteDate() == null) {</span>
+<span class="nc" id="L649">                response.add(&quot;is_default_password&quot;, Constants.DEFAULT_ADMIN_PASSWORD.equals(adminUser.getPassword()));</span>
+            }
+<span class="nc" id="L651">        } else {</span>
+            // Update the last connection date
+<span class="nc" id="L653">            String authToken = getAuthToken();</span>
+<span class="nc" id="L654">            AuthenticationTokenDao authenticationTokenDao = new AuthenticationTokenDao();</span>
+<span class="nc" id="L655">            authenticationTokenDao.updateLastConnectionDate(authToken);</span>
+            
+            // Build the response
+<span class="nc" id="L658">            response.add(&quot;anonymous&quot;, false);</span>
+<span class="nc" id="L659">            UserDao userDao = new UserDao();</span>
+<span class="nc" id="L660">            GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L661">            User user = userDao.getById(principal.getId());</span>
+<span class="nc" id="L662">            List&lt;GroupDto&gt; groupDtoList = groupDao.findByCriteria(new GroupCriteria()</span>
+<span class="nc" id="L663">                    .setUserId(user.getId())</span>
+<span class="nc" id="L664">                    .setRecursive(true), null);</span>
+            
+<span class="nc" id="L666">            response.add(&quot;username&quot;, user.getUsername())</span>
+<span class="nc" id="L667">                    .add(&quot;email&quot;, user.getEmail())</span>
+<span class="nc" id="L668">                    .add(&quot;storage_quota&quot;, user.getStorageQuota())</span>
+<span class="nc" id="L669">                    .add(&quot;storage_current&quot;, user.getStorageCurrent())</span>
+<span class="nc bnc" id="L670" title="All 2 branches missed.">                    .add(&quot;totp_enabled&quot;, user.getTotpKey() != null)</span>
+<span class="nc" id="L671">                    .add(&quot;onboarding&quot;, user.isOnboarding());</span>
+
+            // Base functions
+<span class="nc" id="L674">            JsonArrayBuilder baseFunctions = Json.createArrayBuilder();</span>
+<span class="nc bnc" id="L675" title="All 2 branches missed.">            for (String baseFunction : ((UserPrincipal) principal).getBaseFunctionSet()) {</span>
+<span class="nc" id="L676">                baseFunctions.add(baseFunction);</span>
+<span class="nc" id="L677">            }</span>
+            
+            // Groups
+<span class="nc" id="L680">            JsonArrayBuilder groups = Json.createArrayBuilder();</span>
+<span class="nc bnc" id="L681" title="All 2 branches missed.">            for (GroupDto groupDto : groupDtoList) {</span>
+<span class="nc" id="L682">                groups.add(groupDto.getName());</span>
+<span class="nc" id="L683">            }</span>
+            
+<span class="nc" id="L685">            response.add(&quot;base_functions&quot;, baseFunctions)</span>
+<span class="nc" id="L686">                    .add(&quot;groups&quot;, groups)</span>
+<span class="nc bnc" id="L687" title="All 4 branches missed.">                    .add(&quot;is_default_password&quot;, hasBaseFunction(BaseFunction.ADMIN) &amp;&amp; Constants.DEFAULT_ADMIN_PASSWORD.equals(user.getPassword()));</span>
+        }
+        
+<span class="nc" id="L690">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Returns the information about a user.
+     *
+     * @api {get} /user/:username Get a user
+     * @apiName GetUserUsername
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiSuccess {String} username Username
+     * @apiSuccess {String} email E-mail
+     * @apiSuccess {Boolean} totp_enabled True if TOTP authentication is enabled
+     * @apiSuccess {Number} storage_quota Storage quota (in bytes)
+     * @apiSuccess {Number} storage_current Quota used (in bytes)
+     * @apiSuccess {String[]} groups Groups
+     * @apiSuccess {Boolean} disabled True if the user is disabled
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) UserNotFound The user does not exist
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param username Username
+     * @return Response
+     */
+    @GET
+    @Path(&quot;{username: [a-zA-Z0-9_@\\.]+}&quot;)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response view(@PathParam(&quot;username&quot;) String username) {
+<span class="nc bnc" id="L719" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L720">            throw new ForbiddenClientException();</span>
+        }
+        
+<span class="nc" id="L723">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L724">        User user = userDao.getActiveByUsername(username);</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L726">            throw new ClientException(&quot;UserNotFound&quot;, &quot;The user does not exist&quot;);</span>
+        }
+        
+        // Groups
+<span class="nc" id="L730">        GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L731">        List&lt;GroupDto&gt; groupDtoList = groupDao.findByCriteria(</span>
+<span class="nc" id="L732">                new GroupCriteria().setUserId(user.getId()),</span>
+<span class="nc" id="L733">                new SortCriteria(1, true));</span>
+<span class="nc" id="L734">        JsonArrayBuilder groups = Json.createArrayBuilder();</span>
+<span class="nc bnc" id="L735" title="All 2 branches missed.">        for (GroupDto groupDto : groupDtoList) {</span>
+<span class="nc" id="L736">            groups.add(groupDto.getName());</span>
+<span class="nc" id="L737">        }</span>
+        
+<span class="nc" id="L739">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L740">                .add(&quot;username&quot;, user.getUsername())</span>
+<span class="nc" id="L741">                .add(&quot;groups&quot;, groups)</span>
+<span class="nc" id="L742">                .add(&quot;email&quot;, user.getEmail())</span>
+<span class="nc bnc" id="L743" title="All 2 branches missed.">                .add(&quot;totp_enabled&quot;, user.getTotpKey() != null)</span>
+<span class="nc" id="L744">                .add(&quot;storage_quota&quot;, user.getStorageQuota())</span>
+<span class="nc" id="L745">                .add(&quot;storage_current&quot;, user.getStorageCurrent())</span>
+<span class="nc bnc" id="L746" title="All 2 branches missed.">                .add(&quot;disabled&quot;, user.getDisableDate() != null);</span>
+<span class="nc" id="L747">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Returns all active users.
+     *
+     * @api {get} /user/list Get users
+     * @apiName GetUserList
+     * @apiGroup User
+     * @apiParam {Number} sort_column Column index to sort on
+     * @apiParam {Boolean} asc If true, sort in ascending order
+     * @apiParam {String} group Filter on this group
+     * @apiSuccess {Object[]} users List of users
+     * @apiSuccess {String} users.id ID
+     * @apiSuccess {String} users.username Username
+     * @apiSuccess {String} users.email E-mail
+     * @apiSuccess {Boolean} users.totp_enabled True if TOTP authentication is enabled
+     * @apiSuccess {Number} users.storage_quota Storage quota (in bytes)
+     * @apiSuccess {Number} users.storage_current Quota used (in bytes)
+     * @apiSuccess {Number} users.create_date Create date (timestamp)
+     * @apiSuccess {Number} users.disabled True if the user is disabled
+     * @apiError (client) ForbiddenError Access denied
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param sortColumn Sort index
+     * @param asc If true, ascending sorting, else descending
+     * @param groupName Only return users from this group
+     * @return Response
+     */
+    @GET
+    @Path(&quot;list&quot;)
+    public Response list(
+            @QueryParam(&quot;sort_column&quot;) Integer sortColumn,
+            @QueryParam(&quot;asc&quot;) Boolean asc,
+            @QueryParam(&quot;group&quot;) String groupName) {
+<span class="nc bnc" id="L783" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L784">            throw new ForbiddenClientException();</span>
+        }
+        
+<span class="nc" id="L787">        JsonArrayBuilder users = Json.createArrayBuilder();</span>
+<span class="nc" id="L788">        SortCriteria sortCriteria = new SortCriteria(sortColumn, asc);</span>
+
+        // Validate the group
+<span class="nc" id="L791">        String groupId = null;</span>
+<span class="nc bnc" id="L792" title="All 2 branches missed.">        if (!Strings.isNullOrEmpty(groupName)) {</span>
+<span class="nc" id="L793">            GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L794">            Group group = groupDao.getActiveByName(groupName);</span>
+<span class="nc bnc" id="L795" title="All 2 branches missed.">            if (group != null) {</span>
+<span class="nc" id="L796">                groupId = group.getId();</span>
+            }
+        }
+        
+<span class="nc" id="L800">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L801">        List&lt;UserDto&gt; userDtoList = userDao.findByCriteria(new UserCriteria().setGroupId(groupId), sortCriteria);</span>
+<span class="nc bnc" id="L802" title="All 2 branches missed.">        for (UserDto userDto : userDtoList) {</span>
+<span class="nc" id="L803">            users.add(Json.createObjectBuilder()</span>
+<span class="nc" id="L804">                    .add(&quot;id&quot;, userDto.getId())</span>
+<span class="nc" id="L805">                    .add(&quot;username&quot;, userDto.getUsername())</span>
+<span class="nc" id="L806">                    .add(&quot;email&quot;, userDto.getEmail())</span>
+<span class="nc bnc" id="L807" title="All 2 branches missed.">                    .add(&quot;totp_enabled&quot;, userDto.getTotpKey() != null)</span>
+<span class="nc" id="L808">                    .add(&quot;storage_quota&quot;, userDto.getStorageQuota())</span>
+<span class="nc" id="L809">                    .add(&quot;storage_current&quot;, userDto.getStorageCurrent())</span>
+<span class="nc" id="L810">                    .add(&quot;create_date&quot;, userDto.getCreateTimestamp())</span>
+<span class="nc bnc" id="L811" title="All 2 branches missed.">                    .add(&quot;disabled&quot;, userDto.getDisableTimestamp() != null));</span>
+<span class="nc" id="L812">        }</span>
+        
+<span class="nc" id="L814">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L815">                .add(&quot;users&quot;, users);</span>
+<span class="nc" id="L816">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Returns all active sessions.
+     *
+     * @api {get} /user/session Get active sessions
+     * @apiDescription This resource lists all active token which can be used to log in to the current user account.
+     * @apiName GetUserSession
+     * @apiGroup User
+     * @apiSuccess {Object[]} sessions List of sessions
+     * @apiSuccess {Number} create_date Create date of this token
+     * @apiSuccess {String} ip IP used to log in
+     * @apiSuccess {String} user_agent User agent used to log in
+     * @apiSuccess {Number} last_connection_date Last connection date (timestamp)
+     * @apiSuccess {Boolean} current If true, this token is the current one
+     * @apiError (client) ForbiddenError Access denied
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @GET
+    @Path(&quot;session&quot;)
+    public Response session() {
+<span class="pc bpc" id="L841" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L842">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Get the value of the session token
+<span class="fc" id="L846">        String authToken = getAuthToken();</span>
+        
+<span class="fc" id="L848">        JsonArrayBuilder sessions = Json.createArrayBuilder();</span>
+
+        // The guest user cannot see other sessions
+<span class="pc bpc" id="L851" title="1 of 2 branches missed.">        if (!principal.isGuest()) {</span>
+<span class="nc" id="L852">            AuthenticationTokenDao authenticationTokenDao = new AuthenticationTokenDao();</span>
+<span class="nc bnc" id="L853" title="All 2 branches missed.">            for (AuthenticationToken authenticationToken : authenticationTokenDao.getByUserId(principal.getId())) {</span>
+<span class="nc" id="L854">                JsonObjectBuilder session = Json.createObjectBuilder()</span>
+<span class="nc" id="L855">                        .add(&quot;create_date&quot;, authenticationToken.getCreationDate().getTime())</span>
+<span class="nc" id="L856">                        .add(&quot;ip&quot;, JsonUtil.nullable(authenticationToken.getIp()))</span>
+<span class="nc" id="L857">                        .add(&quot;user_agent&quot;, JsonUtil.nullable(authenticationToken.getUserAgent()));</span>
+<span class="nc bnc" id="L858" title="All 2 branches missed.">                if (authenticationToken.getLastConnectionDate() != null) {</span>
+<span class="nc" id="L859">                    session.add(&quot;last_connection_date&quot;, authenticationToken.getLastConnectionDate().getTime());</span>
+                }
+<span class="nc" id="L861">                session.add(&quot;current&quot;, authenticationToken.getId().equals(authToken));</span>
+<span class="nc" id="L862">                sessions.add(session);</span>
+<span class="nc" id="L863">            }</span>
+        }
+        
+<span class="fc" id="L866">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L867">                .add(&quot;sessions&quot;, sessions);</span>
+<span class="fc" id="L868">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Deletes all active sessions except the one used for this request.
+     *
+     * @api {delete} /user/session Delete all sessions
+     * @apiDescription This resource deletes all active token linked to this account, except the one used to make this request.
+     * @apiName DeleteUserSession
+     * @apiGroup User
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied or connected as guest
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @DELETE
+    @Path(&quot;session&quot;)
+    public Response deleteSession() {
+<span class="pc bpc" id="L888" title="2 of 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="fc" id="L889">            throw new ForbiddenClientException();</span>
+        }
+
+        // Get the value of the session token
+<span class="nc" id="L893">        String authToken = getAuthToken();</span>
+        
+        // Remove other tokens
+<span class="nc" id="L896">        AuthenticationTokenDao authenticationTokenDao = new AuthenticationTokenDao();</span>
+<span class="nc" id="L897">        authenticationTokenDao.deleteByUserId(principal.getId(), authToken);</span>
+        
+        // Always return OK
+<span class="nc" id="L900">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L901">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L902">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Mark the onboarding experience as passed.
+     *
+     * @api {post} /user/onboarded Mark the onboarding experience as passed
+     * @apiDescription Once the onboarding experience has been passed by the user, this resource prevent it from being displayed again.
+     * @apiName PostUserOnboarded
+     * @apiGroup User
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiPermission user
+     * @apiVersion 1.7.0
+     *
+     * @return Response
+     */
+    @POST
+    @Path(&quot;onboarded&quot;)
+    public Response onboarded() {
+<span class="nc bnc" id="L922" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L923">            throw new ForbiddenClientException();</span>
+        }
+
+        // Save it
+<span class="nc" id="L927">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L928">        User user = userDao.getActiveByUsername(principal.getName());</span>
+<span class="nc" id="L929">        user.setOnboarding(false);</span>
+<span class="nc" id="L930">        userDao.updateOnboarding(user);</span>
+
+        // Always return OK
+<span class="nc" id="L933">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L934">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L935">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Enable time-based one-time password.
+     *
+     * @api {post} /user/enable_totp Enable TOTP authentication
+     * @apiDescription This resource enables the Time-based One-time Password authentication.
+     * All following login will need a validation code generated from the given secret seed.
+     * @apiName PostUserEnableTotp
+     * @apiGroup User
+     * @apiSuccess {String} secret Secret TOTP seed to initiate the algorithm
+     * @apiError (client) ForbiddenError Access denied or connected as guest
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @POST
+    @Path(&quot;enable_totp&quot;)
+    public Response enableTotp() {
+<span class="pc bpc" id="L956" title="2 of 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="fc" id="L957">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Create a new TOTP key
+<span class="nc" id="L961">        GoogleAuthenticator gAuth = new GoogleAuthenticator();</span>
+<span class="nc" id="L962">        final GoogleAuthenticatorKey key = gAuth.createCredentials();</span>
+        
+        // Save it
+<span class="nc" id="L965">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L966">        User user = userDao.getActiveByUsername(principal.getName());</span>
+<span class="nc" id="L967">        user.setTotpKey(key.getKey());</span>
+<span class="nc" id="L968">        userDao.update(user, principal.getId());</span>
+        
+<span class="nc" id="L970">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L971">                .add(&quot;secret&quot;, key.getKey());</span>
+<span class="nc" id="L972">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Test time-based one-time password.
+     *
+     * @api {post} /user/test_totp Test TOTP authentication
+     * @apiDescription Test a TOTP validation code.
+     * @apiName PostUserTestTotp
+     * @apiParam {String} code TOTP validation code
+     * @apiGroup User
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError The validation code is not valid or access denied
+     * @apiPermission user
+     * @apiVersion 1.6.0
+     *
+     * @return Response
+     */
+    @POST
+    @Path(&quot;test_totp&quot;)
+    public Response testTotp(@FormParam(&quot;code&quot;) String validationCodeStr) {
+<span class="nc bnc" id="L993" title="All 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="nc" id="L994">            throw new ForbiddenClientException();</span>
+        }
+
+        // Get the user
+<span class="nc" id="L998">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L999">        User user = userDao.getActiveByUsername(principal.getName());</span>
+
+        // Test the validation code
+<span class="nc bnc" id="L1002" title="All 2 branches missed.">        if (user.getTotpKey() != null) {</span>
+<span class="nc" id="L1003">            int validationCode = ValidationUtil.validateInteger(validationCodeStr, &quot;code&quot;);</span>
+<span class="nc" id="L1004">            GoogleAuthenticator googleAuthenticator = new GoogleAuthenticator();</span>
+<span class="nc bnc" id="L1005" title="All 2 branches missed.">            if (!googleAuthenticator.authorize(user.getTotpKey(), validationCode)) {</span>
+<span class="nc" id="L1006">                throw new ForbiddenClientException();</span>
+            }
+        }
+
+        // Always return OK
+<span class="nc" id="L1011">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L1012">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L1013">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Disable time-based one-time password for the current user.
+     *
+     * @api {post} /user/disable_totp Disable TOTP authentication for the current user
+     * @apiName PostUserDisableTotp
+     * @apiGroup User
+     * @apiParam {String{1..100}} password Password
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied or connected as guest
+     * @apiError (client) ValidationError Validation error
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param password Password
+     * @return Response
+     */
+    @POST
+    @Path(&quot;disable_totp&quot;)
+    public Response disableTotp(@FormParam(&quot;password&quot;) String password) {
+<span class="pc bpc" id="L1035" title="2 of 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="fc" id="L1036">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Validate the input data
+<span class="nc" id="L1040">        password = ValidationUtil.validateLength(password, &quot;password&quot;, 1, 100, false);</span>
+
+        // Check the password and get the user
+<span class="nc" id="L1043">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L1044">        User user = userDao.authenticate(principal.getName(), password);</span>
+<span class="nc bnc" id="L1045" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L1046">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Remove the TOTP key
+<span class="nc" id="L1050">        user.setTotpKey(null);</span>
+<span class="nc" id="L1051">        userDao.update(user, principal.getId());</span>
+        
+        // Always return OK
+<span class="nc" id="L1054">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L1055">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L1056">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Create a key to reset a password and send it by email.
+     *
+     * @api {post} /user/password_lost Create a key to reset a password and send it by email
+     * @apiName PostUserPasswordLost
+     * @apiGroup User
+     * @apiParam {String} username Username
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ValidationError Validation error
+     * @apiPermission none
+     * @apiVersion 1.5.0
+     *
+     * @param username Username
+     * @return Response
+     */
+    @POST
+    @Path(&quot;password_lost&quot;)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response passwordLost(@FormParam(&quot;username&quot;) String username) {
+<span class="nc" id="L1078">        authenticate();</span>
+
+        // Validate input data
+<span class="nc" id="L1081">        ValidationUtil.validateStringNotBlank(&quot;username&quot;, username);</span>
+
+        // Prepare response
+<span class="nc" id="L1084">        Response response = Response.ok().entity(Json.createObjectBuilder()</span>
+<span class="nc" id="L1085">                .add(&quot;status&quot;, &quot;ok&quot;)</span>
+<span class="nc" id="L1086">                .build()).build();</span>
+
+        // Check for user existence
+<span class="nc" id="L1089">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L1090">        List&lt;UserDto&gt; userDtoList = userDao.findByCriteria(new UserCriteria().setUserName(username), null);</span>
+<span class="nc bnc" id="L1091" title="All 2 branches missed.">        if (userDtoList.isEmpty()) {</span>
+<span class="nc" id="L1092">            return response;</span>
+        }
+<span class="nc" id="L1094">        UserDto user = userDtoList.get(0);</span>
+
+        // Create the password recovery key
+<span class="nc" id="L1097">        PasswordRecoveryDao passwordRecoveryDao = new PasswordRecoveryDao();</span>
+<span class="nc" id="L1098">        PasswordRecovery passwordRecovery = new PasswordRecovery();</span>
+<span class="nc" id="L1099">        passwordRecovery.setUsername(user.getUsername());</span>
+<span class="nc" id="L1100">        passwordRecoveryDao.create(passwordRecovery);</span>
+
+        // Fire a password lost event
+<span class="nc" id="L1103">        PasswordLostEvent passwordLostEvent = new PasswordLostEvent();</span>
+<span class="nc" id="L1104">        passwordLostEvent.setUser(user);</span>
+<span class="nc" id="L1105">        passwordLostEvent.setPasswordRecovery(passwordRecovery);</span>
+<span class="nc" id="L1106">        AppContext.getInstance().getMailEventBus().post(passwordLostEvent);</span>
+
+        // Always return OK
+<span class="nc" id="L1109">        return response;</span>
+    }
+
+    /**
+     * Reset the user's password.
+     *
+     * @api {post} /user/password_reset Reset the user's password
+     * @apiName PostUserPasswordReset
+     * @apiGroup User
+     * @apiParam {String} key Password recovery key
+     * @apiParam {String} password New password
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) KeyNotFound Password recovery key not found
+     * @apiError (client) ValidationError Validation error
+     * @apiPermission none
+     * @apiVersion 1.5.0
+     *
+     * @param passwordResetKey Password reset key
+     * @param password New password
+     * @return Response
+     */
+    @POST
+    @Path(&quot;password_reset&quot;)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response passwordReset(
+            @FormParam(&quot;key&quot;) String passwordResetKey,
+            @FormParam(&quot;password&quot;) String password) {
+<span class="nc" id="L1136">        authenticate();</span>
+
+        // Validate input data
+<span class="nc" id="L1139">        ValidationUtil.validateRequired(&quot;key&quot;, passwordResetKey);</span>
+<span class="nc" id="L1140">        password = ValidationUtil.validateLength(password, &quot;password&quot;, 8, 50, true);</span>
+
+        // Load the password recovery key
+<span class="nc" id="L1143">        PasswordRecoveryDao passwordRecoveryDao = new PasswordRecoveryDao();</span>
+<span class="nc" id="L1144">        PasswordRecovery passwordRecovery = passwordRecoveryDao.getActiveById(passwordResetKey);</span>
+<span class="nc bnc" id="L1145" title="All 2 branches missed.">        if (passwordRecovery == null) {</span>
+<span class="nc" id="L1146">            throw new ClientException(&quot;KeyNotFound&quot;, &quot;Password recovery key not found&quot;);</span>
+        }
+
+<span class="nc" id="L1149">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L1150">        User user = userDao.getActiveByUsername(passwordRecovery.getUsername());</span>
+
+        // Change the password
+<span class="nc" id="L1153">        user.setPassword(password);</span>
+<span class="nc" id="L1154">        user = userDao.updatePassword(user, principal.getId());</span>
+
+        // Deletes password recovery requests
+<span class="nc" id="L1157">        passwordRecoveryDao.deleteActiveByLogin(user.getUsername());</span>
+
+        // Always return OK
+<span class="nc" id="L1160">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L1161">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L1162">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Returns the authentication token value.
+     *
+     * @return Token value
+     */
+    private String getAuthToken() {
+<span class="pc bpc" id="L1171" title="1 of 2 branches missed.">        if (request.getCookies() != null) {</span>
+<span class="pc bpc" id="L1172" title="1 of 2 branches missed.">            for (Cookie cookie : request.getCookies()) {</span>
+<span class="pc bpc" id="L1173" title="1 of 2 branches missed.">                if (TokenBasedSecurityFilter.COOKIE_NAME.equals(cookie.getName())</span>
+<span class="pc bpc" id="L1174" title="1 of 2 branches missed.">                        &amp;&amp; !Strings.isNullOrEmpty(cookie.getValue())) {</span>
+<span class="fc" id="L1175">                    return cookie.getValue();</span>
+                }
+            }
+        }
+<span class="nc" id="L1179">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.9.202303310957</span></div></body></html>

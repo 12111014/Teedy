@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GroupResource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Docs Web</a> &gt; <a href="index.source.html" class="el_package">com.sismics.docs.rest.resource</a> &gt; <span class="el_source">GroupResource.java</span></div><h1>GroupResource.java</h1><pre class="source lang-java linenums">package com.sismics.docs.rest.resource;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.Sets;
+import com.sismics.docs.core.constant.AclTargetType;
+import com.sismics.docs.core.dao.GroupDao;
+import com.sismics.docs.core.dao.RoleBaseFunctionDao;
+import com.sismics.docs.core.dao.UserDao;
+import com.sismics.docs.core.dao.criteria.GroupCriteria;
+import com.sismics.docs.core.dao.criteria.UserCriteria;
+import com.sismics.docs.core.dao.dto.GroupDto;
+import com.sismics.docs.core.dao.dto.UserDto;
+import com.sismics.docs.core.model.jpa.Group;
+import com.sismics.docs.core.model.jpa.User;
+import com.sismics.docs.core.model.jpa.UserGroup;
+import com.sismics.docs.core.util.RoutingUtil;
+import com.sismics.docs.core.util.jpa.SortCriteria;
+import com.sismics.docs.rest.constant.BaseFunction;
+import com.sismics.rest.exception.ClientException;
+import com.sismics.rest.exception.ForbiddenClientException;
+import com.sismics.rest.util.ValidationUtil;
+import com.sismics.util.JsonUtil;
+
+import javax.json.Json;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonObjectBuilder;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Response;
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Group REST resources.
+ * 
+ * @author bgamard
+ */
+@Path(&quot;/group&quot;)
+<span class="fc" id="L39">public class GroupResource extends BaseResource {</span>
+    /**
+     * Add a group.
+     *
+     * @api {put} /group Add a group
+     * @apiName PutGroup
+     * @apiGroup Group
+     * @apiParam {String} name Group name
+     * @apiParam {String} [parent] Parent group name
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) GroupAlreadyExists This group already exists
+     * @apiError (client) ParentGroupNotFound Parent group not found
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @PUT
+    public Response add(@FormParam(&quot;parent&quot;) String parentName,
+            @FormParam(&quot;name&quot;) String name) {
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L62">            throw new ForbiddenClientException();</span>
+        }
+<span class="fc" id="L64">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Validate input
+<span class="fc" id="L67">        name = ValidationUtil.validateLength(name, &quot;name&quot;, 1, 50, false);</span>
+<span class="fc" id="L68">        ValidationUtil.validateAlphanumeric(name, &quot;name&quot;);</span>
+        
+        // Avoid duplicates
+<span class="fc" id="L71">        GroupDao groupDao = new GroupDao();</span>
+<span class="fc" id="L72">        Group existingGroup = groupDao.getActiveByName(name);</span>
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">        if (existingGroup != null) {</span>
+<span class="nc" id="L74">            throw new ClientException(&quot;GroupAlreadyExists&quot;, MessageFormat.format(&quot;This group already exists: {0}&quot;, name));</span>
+        }
+        
+        // Validate parent
+<span class="fc" id="L78">        String parentId = null;</span>
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">        if (!Strings.isNullOrEmpty(parentName)) {</span>
+<span class="nc" id="L80">            Group parentGroup = groupDao.getActiveByName(parentName);</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">            if (parentGroup == null) {</span>
+<span class="nc" id="L82">                throw new ClientException(&quot;ParentGroupNotFound&quot;, MessageFormat.format(&quot;This group does not exists: {0}&quot;, parentName));</span>
+            }
+<span class="nc" id="L84">            parentId = parentGroup.getId();</span>
+        }
+        
+        // Create the group
+<span class="fc" id="L88">        groupDao.create(new Group()</span>
+<span class="fc" id="L89">                .setName(name)</span>
+<span class="fc" id="L90">                .setParentId(parentId), principal.getId());</span>
+        
+        // Always return OK
+<span class="fc" id="L93">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L94">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="fc" id="L95">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Update a group.
+     *
+     * @api {post} /group/:name Update a group
+     * @apiName PostGroup
+     * @apiGroup Group
+     * @apiParam {String} name Group name
+     * @apiParam {String} [parent] Parent group name
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) GroupAlreadyExists This group already exists
+     * @apiError (client) ParentGroupNotFound Parent group not found
+     * @apiError (client) NotFound Group not found
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @POST
+    @Path(&quot;{groupName: [a-zA-Z0-9_]+}&quot;)
+    public Response update(@PathParam(&quot;groupName&quot;) String groupName,
+            @FormParam(&quot;parent&quot;) String parentName,
+            @FormParam(&quot;name&quot;) String name) {
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L123">            throw new ForbiddenClientException();</span>
+        }
+<span class="nc" id="L125">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Validate input
+<span class="nc" id="L128">        name = ValidationUtil.validateLength(name, &quot;name&quot;, 1, 50, false);</span>
+<span class="nc" id="L129">        ValidationUtil.validateAlphanumeric(name, &quot;name&quot;);</span>
+        
+        // Get the group (by its old name)
+<span class="nc" id="L132">        GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L133">        Group group = groupDao.getActiveByName(groupName);</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (group == null) {</span>
+<span class="nc" id="L135">            throw new NotFoundException();</span>
+        }
+        
+        // Avoid duplicates
+<span class="nc" id="L139">        Group existingGroup = groupDao.getActiveByName(name);</span>
+<span class="nc bnc" id="L140" title="All 4 branches missed.">        if (existingGroup != null &amp;&amp; !existingGroup.getId().equals(group.getId())) {</span>
+<span class="nc" id="L141">            throw new ClientException(&quot;GroupAlreadyExists&quot;, MessageFormat.format(&quot;This group already exists: {0}&quot;, name));</span>
+        }
+        
+        // Validate parent
+<span class="nc" id="L145">        String parentId = null;</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (!Strings.isNullOrEmpty(parentName)) {</span>
+<span class="nc" id="L147">            Group parentGroup = groupDao.getActiveByName(parentName);</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">            if (parentGroup == null) {</span>
+<span class="nc" id="L149">                throw new ClientException(&quot;ParentGroupNotFound&quot;, MessageFormat.format(&quot;This group does not exists: {0}&quot;, parentName));</span>
+            }
+<span class="nc" id="L151">            parentId = parentGroup.getId();</span>
+        }
+
+        // Check that this group is not used in any workflow in case of renaming
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (!name.equals(groupName)) {</span>
+<span class="nc" id="L156">            String routeModelName = RoutingUtil.findRouteModelNameByTargetName(AclTargetType.GROUP, groupName);</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (routeModelName != null) {</span>
+<span class="nc" id="L158">                throw new ClientException(&quot;GroupUsedInRouteModel&quot;, routeModelName);</span>
+            }
+        }
+        
+        // Update the group
+<span class="nc" id="L163">        groupDao.update(group.setName(name)</span>
+<span class="nc" id="L164">                .setParentId(parentId), principal.getId());</span>
+        
+        // Always return OK
+<span class="nc" id="L167">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L168">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L169">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Delete a group.
+     *
+     * @api {delete} /group/:name Delete a group
+     * @apiName DeleteGroup
+     * @apiGroup Group
+     * @apiParam {String} name Group name
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) NotFound Group not found
+     * @apiError (client) GroupUsedInRouteModel The group is used in a route model
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @DELETE
+    @Path(&quot;{groupName: [a-zA-Z0-9_]+}&quot;)
+    public Response delete(@PathParam(&quot;groupName&quot;) String groupName) {
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L192">            throw new ForbiddenClientException();</span>
+        }
+<span class="nc" id="L194">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Get the group
+<span class="nc" id="L197">        GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L198">        Group group = groupDao.getActiveByName(groupName);</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (group == null) {</span>
+<span class="nc" id="L200">            throw new NotFoundException();</span>
+        }
+
+        // Ensure that the admin group is not deleted
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (group.getRoleId() != null) {</span>
+<span class="nc" id="L205">            RoleBaseFunctionDao roleBaseFunctionDao = new RoleBaseFunctionDao();</span>
+<span class="nc" id="L206">            Set&lt;String&gt; baseFunctionSet = roleBaseFunctionDao.findByRoleId(Sets.newHashSet(group.getRoleId()));</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if (baseFunctionSet.contains(BaseFunction.ADMIN.name())) {</span>
+<span class="nc" id="L208">                throw new ClientException(&quot;ForbiddenError&quot;, &quot;The administrators group cannot be deleted&quot;);</span>
+            }
+        }
+
+        // Check that this group is not used in any workflow
+<span class="nc" id="L213">        String routeModelName = RoutingUtil.findRouteModelNameByTargetName(AclTargetType.GROUP, groupName);</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (routeModelName != null) {</span>
+<span class="nc" id="L215">            throw new ClientException(&quot;GroupUsedInRouteModel&quot;, routeModelName);</span>
+        }
+
+        // Delete the group
+<span class="nc" id="L219">        groupDao.delete(group.getId(), principal.getId());</span>
+        
+        // Always return OK
+<span class="nc" id="L222">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L223">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L224">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Add a user to a group.
+     *
+     * @api {put} /group/:name Add a user to a group
+     * @apiName PutGroupMember
+     * @apiGroup Group
+     * @apiParam {String} name Group name
+     * @apiParam {String} username Username
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) NotFound Group or user not found
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @param groupName Group name
+     * @param username Username
+     * @return Response
+     */
+    @PUT
+    @Path(&quot;{groupName: [a-zA-Z0-9_]+}&quot;)
+    public Response addMember(@PathParam(&quot;groupName&quot;) String groupName,
+            @FormParam(&quot;username&quot;) String username) {
+<span class="pc bpc" id="L250" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L251">            throw new ForbiddenClientException();</span>
+        }
+<span class="fc" id="L253">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Validate input
+<span class="fc" id="L256">        groupName = ValidationUtil.validateLength(groupName, &quot;name&quot;, 1, 50, false);</span>
+<span class="fc" id="L257">        username = ValidationUtil.validateLength(username, &quot;username&quot;, 1, 50, false);</span>
+        
+        // Get the group
+<span class="fc" id="L260">        GroupDao groupDao = new GroupDao();</span>
+<span class="fc" id="L261">        Group group = groupDao.getActiveByName(groupName);</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">        if (group == null) {</span>
+<span class="nc" id="L263">            throw new NotFoundException();</span>
+        }
+        
+        // Get the user
+<span class="fc" id="L267">        UserDao userDao = new UserDao();</span>
+<span class="fc" id="L268">        User user = userDao.getActiveByUsername(username);</span>
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L270">            throw new NotFoundException();</span>
+        }
+        
+        // Avoid duplicates
+<span class="fc" id="L274">        List&lt;GroupDto&gt; groupDtoList = groupDao.findByCriteria(new GroupCriteria().setUserId(user.getId()), null);</span>
+<span class="fc" id="L275">        boolean found = false;</span>
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">        for (GroupDto groupDto : groupDtoList) {</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">            if (groupDto.getId().equals(group.getId())) {</span>
+<span class="nc" id="L278">                found = true;</span>
+            }
+<span class="nc" id="L280">        }</span>
+        
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">        if (!found) {</span>
+            // Add the membership
+<span class="fc" id="L284">            UserGroup userGroup = new UserGroup();</span>
+<span class="fc" id="L285">            userGroup.setGroupId(group.getId());</span>
+<span class="fc" id="L286">            userGroup.setUserId(user.getId());</span>
+<span class="fc" id="L287">            groupDao.addMember(userGroup);</span>
+        }
+        
+        // Always return OK
+<span class="fc" id="L291">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L292">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="fc" id="L293">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Remove an user from a group.
+     *
+     * @api {delete} /group/:name/:username Remove a user from a group
+     * @apiName DeleteGroupMember
+     * @apiGroup Group
+     * @apiParam {String} name Group name
+     * @apiParam {String} username Username
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) NotFound Group or user not found
+     * @apiPermission admin
+     * @apiVersion 1.5.0
+     *
+     * @param groupName Group name
+     * @param username Username
+     * @return Response
+     */
+    @DELETE
+    @Path(&quot;{groupName: [a-zA-Z0-9_]+}/{username: [a-zA-Z0-9_@\\.]+}&quot;)
+    public Response removeMember(@PathParam(&quot;groupName&quot;) String groupName,
+            @PathParam(&quot;username&quot;) String username) {
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L320">            throw new ForbiddenClientException();</span>
+        }
+<span class="nc" id="L322">        checkBaseFunction(BaseFunction.ADMIN);</span>
+        
+        // Validate input
+<span class="nc" id="L325">        groupName = ValidationUtil.validateLength(groupName, &quot;name&quot;, 1, 50, false);</span>
+<span class="nc" id="L326">        username = ValidationUtil.validateLength(username, &quot;username&quot;, 1, 50, false);</span>
+        
+        // Get the group
+<span class="nc" id="L329">        GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L330">        Group group = groupDao.getActiveByName(groupName);</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if (group == null) {</span>
+<span class="nc" id="L332">            throw new NotFoundException();</span>
+        }
+        
+        // Get the user
+<span class="nc" id="L336">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L337">        User user = userDao.getActiveByUsername(username);</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L339">            throw new NotFoundException();</span>
+        }
+        
+        // Remove the membership
+<span class="nc" id="L343">        groupDao.removeMember(group.getId(), user.getId());</span>
+        
+        // Always return OK
+<span class="nc" id="L346">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L347">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L348">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Returns all active groups.
+     *
+     * @api {get} /group Get groups
+     * @apiName GetGroupList
+     * @apiGroup Group
+     * @apiParam {Number} sort_column Column index to sort on
+     * @apiParam {Boolean} asc If true, sort in ascending order
+     * @apiSuccess {Object[]} groups List of groups
+     * @apiSuccess {String} groups.name Name
+     * @apiSuccess {String} groups.parent Parent name
+     * @apiError (client) ForbiddenError Access denied
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param sortColumn Sort index
+     * @param asc If true, ascending sorting, else descending
+     * @return Response
+     */
+    @GET
+    public Response list(
+            @QueryParam(&quot;sort_column&quot;) Integer sortColumn,
+            @QueryParam(&quot;asc&quot;) Boolean asc) {
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L375">            throw new ForbiddenClientException();</span>
+        }
+        
+<span class="nc" id="L378">        JsonArrayBuilder groups = Json.createArrayBuilder();</span>
+<span class="nc" id="L379">        SortCriteria sortCriteria = new SortCriteria(sortColumn, asc);</span>
+
+<span class="nc" id="L381">        GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L382">        List&lt;GroupDto&gt; groupDtoList = groupDao.findByCriteria(new GroupCriteria(), sortCriteria);</span>
+<span class="nc bnc" id="L383" title="All 2 branches missed.">        for (GroupDto groupDto : groupDtoList) {</span>
+<span class="nc" id="L384">            groups.add(Json.createObjectBuilder()</span>
+<span class="nc" id="L385">                    .add(&quot;name&quot;, groupDto.getName())</span>
+<span class="nc" id="L386">                    .add(&quot;parent&quot;, JsonUtil.nullable(groupDto.getParentName())));</span>
+<span class="nc" id="L387">        }</span>
+        
+<span class="nc" id="L389">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L390">                .add(&quot;groups&quot;, groups);</span>
+<span class="nc" id="L391">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Get a group.
+     *
+     * @api {get} /group/:name Get a group
+     * @apiName GetGroup
+     * @apiGroup Group
+     * @apiParam {String} name Group name
+     * @apiSuccess {String} name Group name
+     * @apiSuccess {String} parent Parent name
+     * @apiSuccess {String[]} members List of members
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) NotFound Group not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param groupName Group name
+     * @return Response
+     */
+    @GET
+    @Path(&quot;{groupName: [a-zA-Z0-9_]+}&quot;)
+    public Response get(@PathParam(&quot;groupName&quot;) String groupName) {
+<span class="nc bnc" id="L415" title="All 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L416">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Get the group
+<span class="nc" id="L420">        GroupDao groupDao = new GroupDao();</span>
+<span class="nc" id="L421">        Group group = groupDao.getActiveByName(groupName);</span>
+<span class="nc bnc" id="L422" title="All 2 branches missed.">        if (group == null) {</span>
+<span class="nc" id="L423">            throw new NotFoundException();</span>
+        }
+        
+        // Build the response
+<span class="nc" id="L427">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L428">                .add(&quot;name&quot;, group.getName());</span>
+        
+        // Get the parent
+<span class="nc bnc" id="L431" title="All 2 branches missed.">        if (group.getParentId() != null) {</span>
+<span class="nc" id="L432">            Group parentGroup = groupDao.getActiveById(group.getParentId());</span>
+<span class="nc" id="L433">            response.add(&quot;parent&quot;, parentGroup.getName());</span>
+        }
+        
+        // Members
+<span class="nc" id="L437">        JsonArrayBuilder members = Json.createArrayBuilder();</span>
+<span class="nc" id="L438">        UserDao userDao = new UserDao();</span>
+<span class="nc" id="L439">        List&lt;UserDto&gt; userDtoList = userDao.findByCriteria(new UserCriteria().setGroupId(group.getId()), new SortCriteria(1, true));</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        for (UserDto userDto : userDtoList) {</span>
+<span class="nc" id="L441">            members.add(userDto.getUsername());</span>
+<span class="nc" id="L442">        }</span>
+<span class="nc" id="L443">        response.add(&quot;members&quot;, members);</span>
+        
+<span class="nc" id="L445">        return Response.ok().entity(response.build()).build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.9.202303310957</span></div></body></html>

@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShareResource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Docs Web</a> &gt; <a href="index.source.html" class="el_package">com.sismics.docs.rest.resource</a> &gt; <span class="el_source">ShareResource.java</span></div><h1>ShareResource.java</h1><pre class="source lang-java linenums">package com.sismics.docs.rest.resource;
+
+
+import com.sismics.docs.core.constant.AclTargetType;
+import com.sismics.docs.core.constant.AclType;
+import com.sismics.docs.core.constant.PermType;
+import com.sismics.docs.core.dao.AclDao;
+import com.sismics.docs.core.dao.ShareDao;
+import com.sismics.docs.core.event.DocumentUpdatedAsyncEvent;
+import com.sismics.docs.core.model.jpa.Acl;
+import com.sismics.docs.core.model.jpa.Share;
+import com.sismics.rest.exception.ClientException;
+import com.sismics.rest.exception.ForbiddenClientException;
+import com.sismics.rest.util.ValidationUtil;
+import com.sismics.util.JsonUtil;
+import com.sismics.util.context.ThreadLocalContext;
+
+import javax.json.Json;
+import javax.json.JsonObjectBuilder;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Response;
+import java.text.MessageFormat;
+import java.util.List;
+
+/**
+ * Share REST resources.
+ * 
+ * @author bgamard
+ */
+@Path(&quot;/share&quot;)
+<span class="nc" id="L31">public class ShareResource extends BaseResource {</span>
+    /**
+     * Add a share to a document.
+     *
+     * @api {put} /share Share a document
+     * @apiName PutShare
+     * @apiGroup Share
+     * @apiParam {String} id Document ID
+     * @apiParam {String} name Share name
+     * @apiSuccess {String} id Acl ID
+     * @apiSuccess {String=&quot;READ&quot;,&quot;WRITE&quot;} perm Permission
+     * @apiSuccess {String} name Share name
+     * @apiSuccess {String=&quot;SHARE&quot;} type ACL type (always SHARE)
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) NotFound Share not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param documentId Document ID
+     * @param name Share name
+     * @return Response
+     */
+    @PUT
+    public Response add(
+            @FormParam(&quot;id&quot;) String documentId,
+            @FormParam(&quot;name&quot;) String name) {
+<span class="nc bnc" id="L58" title="All 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="nc" id="L59">            throw new ForbiddenClientException();</span>
+        }
+
+        // Validate input data
+<span class="nc" id="L63">        ValidationUtil.validateRequired(documentId, &quot;id&quot;);</span>
+<span class="nc" id="L64">        name = ValidationUtil.validateLength(name, &quot;name&quot;, 1, 36, true);</span>
+
+        // Check write permission on the document
+<span class="nc" id="L67">        AclDao aclDao = new AclDao();</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (!aclDao.checkPermission(documentId, PermType.WRITE, getTargetIdList(null))) {</span>
+<span class="nc" id="L69">            throw new NotFoundException();</span>
+        }
+        
+        // Create the share
+<span class="nc" id="L73">        ShareDao shareDao = new ShareDao();</span>
+<span class="nc" id="L74">        Share share = new Share();</span>
+<span class="nc" id="L75">        share.setName(name);</span>
+<span class="nc" id="L76">        shareDao.create(share);</span>
+        
+        // Create the ACL
+<span class="nc" id="L79">        Acl acl = new Acl();</span>
+<span class="nc" id="L80">        acl.setSourceId(documentId);</span>
+<span class="nc" id="L81">        acl.setPerm(PermType.READ);</span>
+<span class="nc" id="L82">        acl.setType(AclType.USER);</span>
+<span class="nc" id="L83">        acl.setTargetId(share.getId());</span>
+<span class="nc" id="L84">        aclDao.create(acl, principal.getId());</span>
+
+        // Raise a document updated event
+<span class="nc" id="L87">        DocumentUpdatedAsyncEvent event = new DocumentUpdatedAsyncEvent();</span>
+<span class="nc" id="L88">        event.setUserId(principal.getId());</span>
+<span class="nc" id="L89">        event.setDocumentId(documentId);</span>
+<span class="nc" id="L90">        ThreadLocalContext.get().addAsyncEvent(event);</span>
+
+        // Returns the created ACL
+<span class="nc" id="L93">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L94">                .add(&quot;perm&quot;, acl.getPerm().name())</span>
+<span class="nc" id="L95">                .add(&quot;id&quot;, acl.getTargetId())</span>
+<span class="nc" id="L96">                .add(&quot;name&quot;, JsonUtil.nullable(name))</span>
+<span class="nc" id="L97">                .add(&quot;type&quot;, AclTargetType.SHARE.toString());</span>
+<span class="nc" id="L98">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Deletes a share.
+     *
+     * @api {delete} /share/:id Unshare a document
+     * @apiName DeleteShare
+     * @apiGroup Share
+     * @apiParam {String} id Acl ID
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ShareNotFound Share not found
+     * @apiError (client) DocumentNotFound Document not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param id Share ID
+     * @return Response
+     */
+    @DELETE
+    @Path(&quot;{id: [a-z0-9\\-]+}&quot;)
+    public Response delete(
+            @PathParam(&quot;id&quot;) String id) {
+<span class="nc bnc" id="L122" title="All 4 branches missed.">        if (!authenticate() || principal.isGuest()) {</span>
+<span class="nc" id="L123">            throw new ForbiddenClientException();</span>
+        }
+
+        // Check that the user can share the linked document
+<span class="nc" id="L127">        AclDao aclDao = new AclDao();</span>
+<span class="nc" id="L128">        List&lt;Acl&gt; aclList = aclDao.getByTargetId(id);</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (aclList.isEmpty()) {</span>
+<span class="nc" id="L130">            throw new ClientException(&quot;ShareNotFound&quot;, MessageFormat.format(&quot;Share not found: {0}&quot;, id));</span>
+        }
+
+<span class="nc" id="L133">        Acl acl = aclList.get(0);</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (!aclDao.checkPermission(acl.getSourceId(), PermType.WRITE, getTargetIdList(null))) {</span>
+<span class="nc" id="L135">            throw new ClientException(&quot;DocumentNotFound&quot;, MessageFormat.format(&quot;Document not found: {0}&quot;, acl.getSourceId()));</span>
+        }
+
+        // Delete the share
+<span class="nc" id="L139">        ShareDao shareDao = new ShareDao();</span>
+<span class="nc" id="L140">        shareDao.delete(id);</span>
+
+        // Raise a document updated event
+<span class="nc" id="L143">        DocumentUpdatedAsyncEvent event = new DocumentUpdatedAsyncEvent();</span>
+<span class="nc" id="L144">        event.setUserId(principal.getId());</span>
+<span class="nc" id="L145">        event.setDocumentId(acl.getSourceId());</span>
+<span class="nc" id="L146">        ThreadLocalContext.get().addAsyncEvent(event);</span>
+        
+        // Always return OK
+<span class="nc" id="L149">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="nc" id="L150">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="nc" id="L151">        return Response.ok().entity(response.build()).build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.9.202303310957</span></div></body></html>

@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+
+<ruleset name="Custom Rules"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        My custom rules
+
+    </description>
+    <!-- Line of Code rule -->
+    <rule ref="category/java/design.xml/NcssCount">
+        <properties>
+            <property name="methodReportLevel" value="10" />
+            <property name="classReportLevel" value="100" />
+            <property name="ncssOptions" value="" />
+        </properties>
+    </rule>
+    <!-- Cyclomatic Complexity rule -->
+    <rule ref="category/java/design.xml/CyclomaticComplexity">
+        <properties>
+            <property name="classReportLevel" value="80" />
+            <property name="methodReportLevel" value="10" />
+            <property name="cycloOptions" value="" />
+        </properties>
+    </rule>
+    <!-- Coupling Between Objects rule -->
+    <rule ref="category/java/design.xml/CouplingBetweenObjects">
+        <properties>
+            <property name="threshold" value="2" />
+        </properties>
+    </rule>
+    <!-- Weighted Methods per Class rule -->
+    <rule ref="category/java/design.xml/TooManyMethods">
+        <properties>
+            <property name="maxmethods" value="3" />
+        </properties>
+    </rule>
+    <!-- LCOM rule -->
+    <rule ref="category/java/design.xml/TooManyFields">
+        <properties>
+            <property name="maxfields" value="2" />
+        </properties>
+    </rule>
+</ruleset>

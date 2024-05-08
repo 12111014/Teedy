@@ -1,0 +1,205 @@
+# Created at 2024-05-08T16:00:24.686
+Exiting self fork JVM. Received SHUTDOWN command from Maven shutdown hook.
+Thread dump before exiting the process (42164@Jimmy):
+"main" 
+   java.lang.Thread.State: RUNNABLE
+        at app//net.bytebuddy.matcher.DeclaringTypeMatcher.matches(DeclaringTypeMatcher.java)
+        at app//net.bytebuddy.dynamic.scaffold.MethodRegistry$Default.prepare(MethodRegistry.java:483)
+        at app//net.bytebuddy.dynamic.scaffold.subclass.SubclassDynamicTypeBuilder.make(SubclassDynamicTypeBuilder.java:213)
+        at app//net.bytebuddy.dynamic.scaffold.subclass.SubclassDynamicTypeBuilder.make(SubclassDynamicTypeBuilder.java:204)
+        at app//net.bytebuddy.dynamic.DynamicType$Builder$AbstractBase.make(DynamicType.java:3659)
+        at app//net.bytebuddy.dynamic.DynamicType$Builder$AbstractBase$Delegator.make(DynamicType.java:3897)
+        at app//org.hibernate.bytecode.internal.bytebuddy.ByteBuddyState.make(ByteBuddyState.java:205)
+        at app//org.hibernate.bytecode.internal.bytebuddy.ByteBuddyState.make(ByteBuddyState.java:194)
+        at app//org.hibernate.bytecode.internal.bytebuddy.ByteBuddyState.lambda$load$0(ByteBuddyState.java:183)
+        at app//org.hibernate.bytecode.internal.bytebuddy.ByteBuddyState$$Lambda$317/0x00000008014f4a60.call(Unknown Source)
+        at app//net.bytebuddy.TypeCache.findOrInsert(TypeCache.java:153)
+        at app//net.bytebuddy.TypeCache$WithInlineExpunction.findOrInsert(TypeCache.java:366)
+        at app//net.bytebuddy.TypeCache.findOrInsert(TypeCache.java:175)
+        at app//net.bytebuddy.TypeCache$WithInlineExpunction.findOrInsert(TypeCache.java:377)
+        at app//org.hibernate.bytecode.internal.bytebuddy.ByteBuddyState.load(ByteBuddyState.java:180)
+        at app//org.hibernate.bytecode.internal.bytebuddy.ByteBuddyState.loadProxy(ByteBuddyState.java:104)
+        at app//org.hibernate.proxy.pojo.bytebuddy.ByteBuddyProxyHelper.buildProxy(ByteBuddyProxyHelper.java:55)
+        at app//org.hibernate.proxy.pojo.bytebuddy.ByteBuddyProxyFactory.postInstantiate(ByteBuddyProxyFactory.java:61)
+        at app//org.hibernate.tuple.entity.PojoEntityTuplizer.buildProxyFactory(PojoEntityTuplizer.java:102)
+        at app//org.hibernate.tuple.entity.AbstractEntityTuplizer.<init>(AbstractEntityTuplizer.java:160)
+        at app//org.hibernate.tuple.entity.PojoEntityTuplizer.<init>(PojoEntityTuplizer.java:53)
+        at java.base@19.0.2/java.lang.invoke.DirectMethodHandle$Holder.newInvokeSpecial(DirectMethodHandle$Holder)
+        at java.base@19.0.2/java.lang.invoke.LambdaForm$MH/0x000000080100cc00.invoke(LambdaForm$MH)
+        at java.base@19.0.2/java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder)
+        at java.base@19.0.2/jdk.internal.reflect.DirectConstructorHandleAccessor.invokeImpl(DirectConstructorHandleAccessor.java:93)
+        at java.base@19.0.2/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:67)
+        at java.base@19.0.2/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:500)
+        at java.base@19.0.2/java.lang.reflect.Constructor.newInstance(Constructor.java:484)
+        at app//org.hibernate.tuple.entity.EntityTuplizerFactory.constructTuplizer(EntityTuplizerFactory.java:88)
+        at app//org.hibernate.tuple.entity.EntityTuplizerFactory.constructDefaultTuplizer(EntityTuplizerFactory.java:116)
+        at app//org.hibernate.tuple.entity.EntityMetamodel.<init>(EntityMetamodel.java:426)
+        at app//org.hibernate.persister.entity.AbstractEntityPersister.<init>(AbstractEntityPersister.java:609)
+        at app//org.hibernate.persister.entity.SingleTableEntityPersister.<init>(SingleTableEntityPersister.java:128)
+        at java.base@19.0.2/java.lang.invoke.LambdaForm$DMH/0x0000000801084400.newInvokeSpecial(LambdaForm$DMH)
+        at java.base@19.0.2/java.lang.invoke.LambdaForm$MH/0x00000008014d9c00.invoke(LambdaForm$MH)
+        at java.base@19.0.2/java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder)
+        at java.base@19.0.2/jdk.internal.reflect.DirectConstructorHandleAccessor.invokeImpl(DirectConstructorHandleAccessor.java:95)
+        at java.base@19.0.2/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:67)
+        at java.base@19.0.2/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:500)
+        at java.base@19.0.2/java.lang.reflect.Constructor.newInstance(Constructor.java:484)
+        at app//org.hibernate.persister.internal.PersisterFactoryImpl.createEntityPersister(PersisterFactoryImpl.java:96)
+        at app//org.hibernate.persister.internal.PersisterFactoryImpl.createEntityPersister(PersisterFactoryImpl.java:77)
+        at app//org.hibernate.metamodel.internal.MetamodelImpl.initialize(MetamodelImpl.java:181)
+        at app//org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:301)
+        at app//org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:469)
+        at app//org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1259)
+        at app//org.hibernate.jpa.HibernatePersistenceProvider.createEntityManagerFactory(HibernatePersistenceProvider.java:56)
+        at app//javax.persistence.Persistence.createEntityManagerFactory(Persistence.java:79)
+        at app//com.sismics.util.jpa.EMF.<clinit>(EMF.java:55)
+        at app//com.sismics.docs.core.util.TransactionUtil.handle(TransactionUtil.java:37)
+        at app//com.sismics.util.filter.RequestContextFilter.init(RequestContextFilter.java:65)
+        at app//org.glassfish.grizzly.servlet.WebappContext.initFilters(WebappContext.java:1999)
+        at app//org.glassfish.grizzly.servlet.WebappContext.deploy(WebappContext.java:305)
+        at app//com.sismics.docs.rest.BaseJerseyTest.setUp(BaseJerseyTest.java:107)
+        at java.base@19.0.2/java.lang.invoke.LambdaForm$DMH/0x000000080108c800.invokeVirtual(LambdaForm$DMH)
+        at java.base@19.0.2/java.lang.invoke.LambdaForm$MH/0x000000080108d000.invoke(LambdaForm$MH)
+        at java.base@19.0.2/java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder)
+        at java.base@19.0.2/jdk.internal.reflect.DirectMethodHandleAccessor.invokeImpl(DirectMethodHandleAccessor.java:154)
+        at java.base@19.0.2/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+        at java.base@19.0.2/java.lang.reflect.Method.invoke(Method.java:578)
+        at app//org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+        at app//org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+        at app//org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+        at app//org.junit.internal.runners.statements.RunBefores.invokeMethod(RunBefores.java:33)
+        at app//org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:24)
+        at app//org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+        at app//org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+        at app//org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+        at app//org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+        at app//org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+        at app//org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+        at app//org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+        at app//org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+        at app//org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+        at app//org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+        at app//org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+        at app//org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+        at app//org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+        at app//org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:364)
+        at app//org.apache.maven.surefire.junit4.JUnit4Provider.executeWithRerun(JUnit4Provider.java:272)
+        at app//org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:237)
+        at app//org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:158)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:428)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:562)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:548)
+
+"Reference Handler" 
+   java.lang.Thread.State: RUNNABLE
+        at java.base@19.0.2/java.lang.ref.Reference.waitForReferencePendingList(Native Method)
+        at java.base@19.0.2/java.lang.ref.Reference.processPendingReferences(Reference.java:245)
+        at java.base@19.0.2/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:207)
+
+"Finalizer" 
+   java.lang.Thread.State: WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:339)
+        at java.base@19.0.2/java.lang.ref.NativeReferenceQueue.await(NativeReferenceQueue.java:48)
+        at java.base@19.0.2/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:158)
+        at java.base@19.0.2/java.lang.ref.NativeReferenceQueue.remove(NativeReferenceQueue.java:89)
+        at java.base@19.0.2/java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:173)
+
+"Signal Dispatcher" 
+   java.lang.Thread.State: RUNNABLE
+
+"Attach Listener" 
+   java.lang.Thread.State: RUNNABLE
+
+"Common-Cleaner" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@19.0.2/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+        at java.base@19.0.2/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1759)
+        at java.base@19.0.2/java.lang.ref.ReferenceQueue.await(ReferenceQueue.java:71)
+        at java.base@19.0.2/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:143)
+        at java.base@19.0.2/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:218)
+        at java.base@19.0.2/jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:140)
+        at java.base@19.0.2/java.lang.Thread.run(Thread.java:1589)
+        at java.base@19.0.2/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:186)
+
+"Notification Thread" 
+   java.lang.Thread.State: RUNNABLE
+
+"surefire-forkedjvm-command-thread" 
+   java.lang.Thread.State: RUNNABLE
+        at java.management@19.0.2/sun.management.ThreadImpl.getThreadInfo1(Native Method)
+        at java.management@19.0.2/sun.management.ThreadImpl.getThreadInfo(ThreadImpl.java:192)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.generateThreadDump(ForkedBooter.java:649)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.access$400(ForkedBooter.java:82)
+        at app//org.apache.maven.surefire.booter.ForkedBooter$4.update(ForkedBooter.java:340)
+        at app//org.apache.maven.surefire.booter.CommandReader$CommandRunnable.callListeners(CommandReader.java:423)
+        at app//org.apache.maven.surefire.booter.CommandReader$CommandRunnable.exitByConfiguration(CommandReader.java:435)
+        at app//org.apache.maven.surefire.booter.CommandReader$CommandRunnable.run(CommandReader.java:388)
+        at java.base@19.0.2/java.lang.Thread.run(Thread.java:1589)
+
+"Grizzly-HttpSession-Expirer" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@19.0.2/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+        at java.base@19.0.2/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos(AbstractQueuedSynchronizer.java:1674)
+        at java.base@19.0.2/java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:1182)
+        at java.base@19.0.2/java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:899)
+        at java.base@19.0.2/java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+        at java.base@19.0.2/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+        at java.base@19.0.2/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+        at java.base@19.0.2/java.lang.Thread.run(Thread.java:1589)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|7baf7e2c]-AdminTaskTimer" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at java.base@19.0.2/java.util.TimerThread.mainLoop(Timer.java:563)
+        at java.base@19.0.2/java.util.TimerThread.run(Timer.java:516)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|7baf7e2c]-HelperThread-#0" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at app//com.mchange.v2.async.ThreadPoolAsynchronousRunner$PoolThread.run(ThreadPoolAsynchronousRunner.java:683)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|7baf7e2c]-HelperThread-#1" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at app//com.mchange.v2.async.ThreadPoolAsynchronousRunner$PoolThread.run(ThreadPoolAsynchronousRunner.java:683)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|7baf7e2c]-HelperThread-#2" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at app//com.mchange.v2.async.ThreadPoolAsynchronousRunner$PoolThread.run(ThreadPoolAsynchronousRunner.java:683)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|6705b98b]-AdminTaskTimer" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at java.base@19.0.2/java.util.TimerThread.mainLoop(Timer.java:563)
+        at java.base@19.0.2/java.util.TimerThread.run(Timer.java:516)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|6705b98b]-HelperThread-#0" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at app//com.mchange.v2.async.ThreadPoolAsynchronousRunner$PoolThread.run(ThreadPoolAsynchronousRunner.java:683)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|6705b98b]-HelperThread-#1" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at app//com.mchange.v2.async.ThreadPoolAsynchronousRunner$PoolThread.run(ThreadPoolAsynchronousRunner.java:683)
+
+"C3P0PooledConnectionPoolManager[identityToken->2t5clgb3o76ysb1lnzljt|6705b98b]-HelperThread-#2" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@19.0.2/java.lang.Object.wait0(Native Method)
+        at java.base@19.0.2/java.lang.Object.wait(Object.java:366)
+        at app//com.mchange.v2.async.ThreadPoolAsynchronousRunner$PoolThread.run(ThreadPoolAsynchronousRunner.java:683)
+
+
+

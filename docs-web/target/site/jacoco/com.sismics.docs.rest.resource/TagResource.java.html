@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TagResource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Docs Web</a> &gt; <a href="index.source.html" class="el_package">com.sismics.docs.rest.resource</a> &gt; <span class="el_source">TagResource.java</span></div><h1>TagResource.java</h1><pre class="source lang-java linenums">package com.sismics.docs.rest.resource;
+
+import com.google.common.collect.Sets;
+import com.sismics.docs.core.constant.AclType;
+import com.sismics.docs.core.constant.PermType;
+import com.sismics.docs.core.dao.AclDao;
+import com.sismics.docs.core.dao.TagDao;
+import com.sismics.docs.core.dao.criteria.TagCriteria;
+import com.sismics.docs.core.dao.dto.TagDto;
+import com.sismics.docs.core.model.jpa.Acl;
+import com.sismics.docs.core.model.jpa.Tag;
+import com.sismics.docs.core.util.jpa.SortCriteria;
+import com.sismics.rest.exception.ClientException;
+import com.sismics.rest.exception.ForbiddenClientException;
+import com.sismics.rest.util.AclUtil;
+import com.sismics.rest.util.ValidationUtil;
+import org.apache.commons.lang.StringUtils;
+
+import javax.json.Json;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonObjectBuilder;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Response;
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Tag REST resources.
+ * 
+ * @author bgamard
+ */
+@Path(&quot;/tag&quot;)
+<span class="fc" id="L34">public class TagResource extends BaseResource {</span>
+    /**
+     * Returns the list of all visible tags.
+     *
+     * @api {get} /tag/list Get tags
+     * @apiName GetTagList
+     * @apiGroup Tag
+     * @apiSuccess {Object[]} tags List of tags
+     * @apiSuccess {String} tags.id ID
+     * @apiSuccess {String} tags.name Name
+     * @apiSuccess {String} tags.color Color
+     * @apiSuccess {String} tags.parent Parent
+     * @apiError (client) ForbiddenError Access denied
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @return Response
+     */
+    @GET
+    @Path(&quot;/list&quot;)
+    public Response list() {
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L56">            throw new ForbiddenClientException();</span>
+        }
+        
+<span class="fc" id="L59">        TagDao tagDao = new TagDao();</span>
+<span class="fc" id="L60">        List&lt;TagDto&gt; tagDtoList = tagDao.findByCriteria(new TagCriteria().setTargetIdList(getTargetIdList(null)), new SortCriteria(1, true));</span>
+
+        // Extract tag IDs
+<span class="fc" id="L63">        Set&lt;String&gt; tagIdSet = Sets.newHashSet();</span>
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        for (TagDto tagDto : tagDtoList) {</span>
+<span class="fc" id="L65">            tagIdSet.add(tagDto.getId());</span>
+<span class="fc" id="L66">        }</span>
+
+        // Build the response
+<span class="fc" id="L69">        JsonArrayBuilder items = Json.createArrayBuilder();</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">        for (TagDto tagDto : tagDtoList) {</span>
+<span class="fc" id="L71">            JsonObjectBuilder item = Json.createObjectBuilder()</span>
+<span class="fc" id="L72">                    .add(&quot;id&quot;, tagDto.getId())</span>
+<span class="fc" id="L73">                    .add(&quot;name&quot;, tagDto.getName())</span>
+<span class="fc" id="L74">                    .add(&quot;color&quot;, tagDto.getColor());</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">            if (tagIdSet.contains(tagDto.getParentId())) {</span>
+<span class="nc" id="L76">                item.add(&quot;parent&quot;, tagDto.getParentId());</span>
+            }
+<span class="fc" id="L78">            items.add(item);</span>
+<span class="fc" id="L79">        }</span>
+        
+<span class="fc" id="L81">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L82">                .add(&quot;tags&quot;, items);</span>
+<span class="fc" id="L83">        return Response.ok().entity(response.build()).build();</span>
+    }
+
+    /**
+     * Returns a tag.
+     *
+     * @api {get} /tag/:id Get a tag
+     * @apiName GetTag
+     * @apiGroup Tag
+     * @apiSuccess {String} id ID
+     * @apiSuccess {String} name Name
+     * @apiSuccess {String} creator Username of the creator
+     * @apiSuccess {String} color Color
+     * @apiSuccess {String} parent Parent
+     * @apiSuccess {Boolean} writable True if the tag is writable by the current user
+     * @apiSuccess {Object[]} acls List of ACL
+     * @apiSuccess {String} acls.id ID
+     * @apiSuccess {String=&quot;READ&quot;,&quot;WRITE&quot;} acls.perm Permission
+     * @apiSuccess {String} acls.name Target name
+     * @apiSuccess {String=&quot;USER&quot;,&quot;GROUP&quot;,&quot;SHARE&quot;} acls.type Target type
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) NotFound Tag not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param id Tag ID
+     * @return Response
+     */
+    @GET
+    @Path(&quot;{id: [a-z0-9\\-]+}&quot;)
+    public Response get(@PathParam(&quot;id&quot;) String id) {
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L115">            throw new ForbiddenClientException();</span>
+        }
+
+<span class="fc" id="L118">        TagDao tagDao = new TagDao();</span>
+<span class="fc" id="L119">        List&lt;TagDto&gt; tagDtoList = tagDao.findByCriteria(new TagCriteria().setTargetIdList(getTargetIdList(null)).setId(id), null);</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (tagDtoList.isEmpty()) {</span>
+<span class="fc" id="L121">            throw new NotFoundException();</span>
+        }
+
+        // Add tag informatiosn
+<span class="fc" id="L125">        TagDto tagDto = tagDtoList.get(0);</span>
+<span class="fc" id="L126">        JsonObjectBuilder tag = Json.createObjectBuilder()</span>
+<span class="fc" id="L127">                .add(&quot;id&quot;, tagDto.getId())</span>
+<span class="fc" id="L128">                .add(&quot;creator&quot;, tagDto.getCreator())</span>
+<span class="fc" id="L129">                .add(&quot;name&quot;, tagDto.getName())</span>
+<span class="fc" id="L130">                .add(&quot;color&quot;, tagDto.getColor());</span>
+
+        // Add the parent if its visible
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (tagDto.getParentId() != null) {</span>
+<span class="nc" id="L134">            AclDao aclDao = new AclDao();</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            if (aclDao.checkPermission(tagDto.getParentId(), PermType.READ, getTargetIdList(null))) {</span>
+<span class="nc" id="L136">                tag.add(&quot;parent&quot;, tagDto.getParentId());</span>
+            }
+        }
+
+        // Add ACL
+<span class="fc" id="L141">        AclUtil.addAcls(tag, id, getTargetIdList(null));</span>
+
+<span class="fc" id="L143">        return Response.ok().entity(tag.build()).build();</span>
+    }
+
+    /**
+     * Creates a new tag.
+     *
+     * @api {put} /tag Create a tag
+     * @apiName PutTag
+     * @apiGroup Tag
+     * @apiParam {String} name Name
+     * @apiParam {String} color Color
+     * @apiParam {String} parent Parent ID
+     * @apiSuccess {String} id Tag ID
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) IllegalTagName Spaces and colons are not allowed in tag name
+     * @apiError (client) ParentNotFound Parent not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param name Name
+     * @param color Color
+     * @param parentId Parent ID
+     * @return Response
+     */
+    @PUT
+    public Response add(
+            @FormParam(&quot;name&quot;) String name,
+            @FormParam(&quot;color&quot;) String color,
+            @FormParam(&quot;parent&quot;) String parentId) {
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L174">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Validate input data
+<span class="fc" id="L178">        name = ValidationUtil.validateLength(name, &quot;name&quot;, 1, 36, false);</span>
+<span class="fc" id="L179">        ValidationUtil.validateHexColor(color, &quot;color&quot;, true);</span>
+<span class="fc" id="L180">        ValidationUtil.validateTagName(name);</span>
+
+        // Check the parent
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">        if (StringUtils.isEmpty(parentId)) {</span>
+<span class="fc" id="L184">            parentId = null;</span>
+        } else {
+<span class="nc" id="L186">            AclDao aclDao = new AclDao();</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">            if (!aclDao.checkPermission(parentId, PermType.READ, getTargetIdList(null))) {</span>
+<span class="nc" id="L188">                throw new ClientException(&quot;ParentNotFound&quot;, MessageFormat.format(&quot;Parent not found: {0}&quot;, parentId));</span>
+            }
+        }
+
+        // Create the tag
+<span class="fc" id="L193">        TagDao tagDao = new TagDao();</span>
+<span class="fc" id="L194">        Tag tag = new Tag();</span>
+<span class="fc" id="L195">        tag.setName(name);</span>
+<span class="fc" id="L196">        tag.setColor(color);</span>
+<span class="fc" id="L197">        tag.setUserId(principal.getId());</span>
+<span class="fc" id="L198">        tag.setParentId(parentId);</span>
+<span class="fc" id="L199">        String id = tagDao.create(tag, principal.getId());</span>
+
+        // Create read ACL
+<span class="fc" id="L202">        AclDao aclDao = new AclDao();</span>
+<span class="fc" id="L203">        Acl acl = new Acl();</span>
+<span class="fc" id="L204">        acl.setPerm(PermType.READ);</span>
+<span class="fc" id="L205">        acl.setType(AclType.USER);</span>
+<span class="fc" id="L206">        acl.setSourceId(id);</span>
+<span class="fc" id="L207">        acl.setTargetId(principal.getId());</span>
+<span class="fc" id="L208">        aclDao.create(acl, principal.getId());</span>
+
+        // Create write ACL
+<span class="fc" id="L211">        acl = new Acl();</span>
+<span class="fc" id="L212">        acl.setPerm(PermType.WRITE);</span>
+<span class="fc" id="L213">        acl.setType(AclType.USER);</span>
+<span class="fc" id="L214">        acl.setSourceId(id);</span>
+<span class="fc" id="L215">        acl.setTargetId(principal.getId());</span>
+<span class="fc" id="L216">        aclDao.create(acl, principal.getId());</span>
+        
+<span class="fc" id="L218">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L219">                .add(&quot;id&quot;, id);</span>
+<span class="fc" id="L220">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Update a tag.
+     *
+     * @api {post} /tag/:id Update a tag
+     * @apiName PostTag
+     * @apiGroup Tag
+     * @apiParam {String} id Tag ID
+     * @apiParam {String} name Name
+     * @apiParam {String} color Color
+     * @apiParam {String} parent Parent ID
+     * @apiSuccess {String} id Tag ID
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) ValidationError Validation error
+     * @apiError (client) IllegalTagName Spaces and colons are not allowed in tag name
+     * @apiError (client) ParentNotFound Parent not found
+     * @apiError (client) CircularReference Circular reference in parent tag
+     * @apiError (client) NotFound Tag not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     *
+     * @param name Name
+     * @param color Color
+     * @param parentId Parent ID
+     * @return Response
+     */
+    @POST
+    @Path(&quot;{id: [a-z0-9\\-]+}&quot;)
+    public Response update(
+            @PathParam(&quot;id&quot;) String id,
+            @FormParam(&quot;name&quot;) String name,
+            @FormParam(&quot;color&quot;) String color,
+            @FormParam(&quot;parent&quot;) String parentId) {
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L256">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Validate input data
+<span class="fc" id="L260">        name = ValidationUtil.validateLength(name, &quot;name&quot;, 1, 36, true);</span>
+<span class="fc" id="L261">        ValidationUtil.validateHexColor(color, &quot;color&quot;, true);</span>
+<span class="fc" id="L262">        ValidationUtil.validateTagName(name);</span>
+
+        // Check permission
+<span class="fc" id="L265">        AclDao aclDao = new AclDao();</span>
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        if (!aclDao.checkPermission(id, PermType.WRITE, getTargetIdList(null))) {</span>
+<span class="fc" id="L267">            throw new NotFoundException();</span>
+        }
+        
+        // Check the parent
+<span class="fc" id="L271">        TagDao tagDao = new TagDao();</span>
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        if (StringUtils.isEmpty(parentId)) {</span>
+<span class="fc" id="L273">            parentId = null;</span>
+        } else {
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            if (!aclDao.checkPermission(parentId, PermType.READ, getTargetIdList(null))) {</span>
+<span class="nc" id="L276">                throw new ClientException(&quot;ParentNotFound&quot;, MessageFormat.format(&quot;Parent not found: {0}&quot;, parentId));</span>
+            }
+
+<span class="nc" id="L279">            String parentTagId = parentId;</span>
+            do {
+<span class="nc" id="L281">                Tag parentTag = tagDao.getById(parentTagId);</span>
+<span class="nc" id="L282">                parentTagId = parentTag.getParentId();</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">                if (parentTag.getId().equals(id)) {</span>
+<span class="nc" id="L284">                    throw new ClientException(&quot;CircularReference&quot;, &quot;Circular reference in parent tag&quot;);</span>
+                }
+<span class="nc bnc" id="L286" title="All 2 branches missed.">            } while (parentTagId != null);</span>
+        }
+
+        // Update the tag
+<span class="fc" id="L290">        Tag tag = tagDao.getById(id);</span>
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">        if (!StringUtils.isEmpty(name)) {</span>
+<span class="fc" id="L292">            tag.setName(name);</span>
+        }
+<span class="pc bpc" id="L294" title="1 of 2 branches missed.">        if (!StringUtils.isEmpty(color)) {</span>
+<span class="fc" id="L295">            tag.setColor(color);</span>
+        }
+        // Parent tag is always updated to have the possibility to delete it
+<span class="fc" id="L298">        tag.setParentId(parentId);</span>
+        
+<span class="fc" id="L300">        tagDao.update(tag, principal.getId());</span>
+        
+<span class="fc" id="L302">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L303">                .add(&quot;id&quot;, id);</span>
+<span class="fc" id="L304">        return Response.ok().entity(response.build()).build();</span>
+    }
+    
+    /**
+     * Delete a tag.
+     *
+     * @api {delete} /tag/:id Delete a tag
+     * @apiName DeleteTag
+     * @apiGroup Tag
+     * @apiParam {String} id Tag ID
+     * @apiSuccess {String} status Status OK
+     * @apiError (client) ForbiddenError Access denied
+     * @apiError (client) NotFound Tag not found
+     * @apiPermission user
+     * @apiVersion 1.5.0
+     * 
+     * @param id Tag ID
+     * @return Response
+     */
+    @DELETE
+    @Path(&quot;{id: [a-z0-9\\-]+}&quot;)
+    public Response delete(
+            @PathParam(&quot;id&quot;) String id) {
+<span class="pc bpc" id="L327" title="1 of 2 branches missed.">        if (!authenticate()) {</span>
+<span class="nc" id="L328">            throw new ForbiddenClientException();</span>
+        }
+        
+        // Get the tag
+<span class="fc" id="L332">        AclDao aclDao = new AclDao();</span>
+<span class="pc bpc" id="L333" title="1 of 2 branches missed.">        if (!aclDao.checkPermission(id, PermType.WRITE, getTargetIdList(null))) {</span>
+<span class="nc" id="L334">            throw new NotFoundException();</span>
+        }
+
+        // Delete the tag
+<span class="fc" id="L338">        TagDao tagDao = new TagDao();</span>
+<span class="fc" id="L339">        tagDao.delete(id, principal.getId());</span>
+        
+        // Always return OK
+<span class="fc" id="L342">        JsonObjectBuilder response = Json.createObjectBuilder()</span>
+<span class="fc" id="L343">                .add(&quot;status&quot;, &quot;ok&quot;);</span>
+<span class="fc" id="L344">        return Response.ok().entity(response.build()).build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.9.202303310957</span></div></body></html>
