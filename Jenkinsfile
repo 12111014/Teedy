@@ -59,7 +59,7 @@ pipeline {
         }
         stage('K8s') {
             steps {
-                sh 'kubectl set image deployments/hello-node docs=jimmy889/teedy_local:latest'
+                sh 'kubectl set image deployments/hello-node docs=jimmy889/teedy_local:lab13'
             }
         }
     }
