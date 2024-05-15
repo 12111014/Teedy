@@ -52,8 +52,9 @@ pipeline {
         stage('Upload image') {
             steps{
             //your command
+                sh 'docker tag teedy2024_manual jimmy889/teedy_local:lab13'
                 //sh 'docker tag teedy2024_manual jimmy889/teedy_local:latest'
-                sh 'docker push jimmy889/teedy_local:latest'
+                sh 'docker push jimmy889/teedy_local:lab13'
             }
         }
         stage('K8s') {
